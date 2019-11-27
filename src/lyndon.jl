@@ -21,6 +21,10 @@ function lyndon_words(k::Int, n::Int)
     W
 end
 
+function lyndon_words(k::Int, nn::Vector{Int})
+    vcat([lyndon_words(k, n) for n in nn]...)
+end
+
 
 function gen_brackets(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
     if l==r

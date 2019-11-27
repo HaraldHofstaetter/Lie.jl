@@ -23,10 +23,9 @@ mutable struct FreeLieAlgebra
     p1::Vector{Int}
     p2::Vector{Int}
     nn::Vector{Int}
-    T::ColoredRootedTree
-    u::Vector{Int}
     sigma::Vector{Int}
     S::Vector{Vector{Tuple{Int,Int}}}
+    #T::ColoredRootedTree
 end
 
 function gen_hall_data(N::Int)
@@ -83,11 +82,8 @@ function FreeLieAlgebra(N::Int; lyndon_basis::Bool=false)
     T = ColoredRootedTree()
     new_tree!(T,[0])
     new_tree!(T,[1])
-    u = zeros(Int, dim)
-    u[1]=1
-    u[2]=2
     for i = 3:dim
-        u[i] = circ!(T, p1[i], p2[i])    
+        circ!(T, p1[i], p2[i])    
     end
 
     d1 = 3
@@ -123,7 +119,7 @@ function FreeLieAlgebra(N::Int; lyndon_basis::Bool=false)
         sigma[i] = kappa[i]*sigma[p1[i]]*sigma[p2[i]]
     end
 
-    FreeLieAlgebra(N, dim, ntrees, p1, p2, nn, T, u, sigma, S)
+    FreeLieAlgebra(N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
 end
 
 mutable struct LieSeries{T}
@@ -161,7 +157,8 @@ function copyto!(dest::LieSeries{T}, src::LieSeries{T}) where T
     copyto!(dest.c, src.c)
 end
 
-function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T}; order::Int=alpha.L.N) where T
+function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T}; 
+                     order::Int=alpha.L.N) where T
     @assert alpha.L == beta.L && alpha.L == gamma.L
     @assert gamma!=alpha && gamma!=beta
     L = alpha.L
@@ -236,3 +233,5 @@ function BCH(L::FreeLieAlgebra; T::Type=Rational{Int}, verbose::Bool=false)
     end
     Z
 end
+
+
