@@ -89,19 +89,19 @@ function genLB(k::Int, n:: Int, t::Int,
 end
 
 
-function lyndon_basis(k::Int, n::Int; lyndon_words::Bool=false)
+function lyndon_basis(k::Int, n::Int)
     a = zeros(Int, n+1)
-    W = lyndon_words ? Vector{Int}[] : nothing
     p = ones(Int, n)
     split = zeros(Int, n, n)
     B = Any[]
-    genLB(k, n, 1, p, split, a, W=W, B=B)
-    if lyndon_words
-        return W, B
-    else
-        return B
-    end
+    genLB(k, n, 1, p, split, a, B=B)
+    B
 end
+
+function lyndon_basis(k::Int, nn::Vector{Int})
+    vcat([lyndon_basis(k, n) for n in nn]...)
+end
+
 
 
 function lyndon_words_factored(k::Int, n::Int)
@@ -113,6 +113,7 @@ function lyndon_words_factored(k::Int, n::Int)
     genLB(k, n, 1, p, split, a, W=W, f=f)
     W,f
 end
+
 
 
 

@@ -17,7 +17,8 @@ circ!(RT::ColoredRootedTree, t1::Vector{Int}, t2::Vector{Int}) = new_tree!(RT, v
 circ!(RT::ColoredRootedTree, t1::Int, t2::Int) =   circ!(RT, RT.T[t1], RT.T[t2])
 
 mutable struct FreeLieAlgebra
-    N::Int
+    K::Int # number of generators
+    N::Int # maximum order 
     dim::Int
     ntrees::Int
     p1::Vector{Int}
@@ -25,14 +26,14 @@ mutable struct FreeLieAlgebra
     nn::Vector{Int}
     sigma::Vector{Int}
     S::Vector{Vector{Tuple{Int,Int}}}
-    #T::ColoredRootedTree
+    #T::ColoredRootedTree # only needed for generating S, not for calculations with LieSeries
 end
 
-function gen_hall_data(N::Int)
-    p1=[1,2]
-    p2=[0,0]
-    nn=[1,1]
-    i=3
+function gen_hall_data(K::Int, N::Int)
+    p1 = collect(1:K)
+    p2 = zeros(Int, K)
+    nn = ones(Int, K)
+    i = K+1
     for n=2:N
         for j=1:i-1
             for k=j+1:i-1
@@ -48,14 +49,14 @@ function gen_hall_data(N::Int)
     p1, p2, nn
 end
 
-function gen_lyndon_data(N::Int)
-    p1=[1,2]
-    p2=[0,0]
-    nn=[1,1]
-    wordindex = Dict{Vector{Int},Int}([0]=>1, [1]=>2)
-    i=3
+function gen_lyndon_data(K::Int, N::Int)
+    p1 = collect(1:K)
+    p2 = zeros(Int, K)
+    nn = ones(Int, K)
+    wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
+    i = K+1
     for n=2:N
-        W,f = lyndon_words_factored(2, n)
+        W,f = lyndon_words_factored(K, n)
         for j=1:length(W)
             w = W[j]
             s1 = w[1:f[j]-1]
@@ -70,26 +71,53 @@ function gen_lyndon_data(N::Int)
     p1, p2, nn
 end
 
+function gen_rightnormed_data(K::Int, N::Int)
+    p1 = collect(1:K)
+    p2 = zeros(Int, K)
+    nn = ones(Int, K)
+    wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
+    i = K+1
+    for n=2:N
+        W = lyndon_words(K, n)
+        for j=1:length(W)
+            w = lyndon2rightnormed(W[j])
+            s1 = w[1:1]
+            s2 = w[2:end]
+            wordindex[w]=i
+            push!(p1, wordindex[s1])
+            push!(p2, wordindex[s2])
+            push!(nn, n)
+            i += 1
+        end
+    end
+    p1, p2, nn
+end
 
-function FreeLieAlgebra(N::Int; lyndon_basis::Bool=false)
+
+
+function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false, rightnormed_basis::Bool=false)
+    @assert K>=2
     if lyndon_basis
-        p1, p2, nn = gen_lyndon_data(N)
+        p1, p2, nn = gen_lyndon_data(K, N)
+    elseif rightnormed_basis
+        p1, p2, nn = gen_rightnormed_data(K, N)
     else
-        p1, p2, nn = gen_hall_data(N)
+        p1, p2, nn = gen_hall_data(K, N)
     end
     dim = length(p1)
 
     T = ColoredRootedTree()
-    new_tree!(T,[0])
-    new_tree!(T,[1])
-    for i = 3:dim
+    for i=1:K
+        new_tree!(T,[i-1])
+    end
+    for i = K+1:dim
         circ!(T, p1[i], p2[i])    
     end
 
-    d1 = 3
+    d1 = K+1 
     d2 = dim
     ntrees = dim
-    S = fill(Tuple{Int,Int}[],2)
+    S = fill(Tuple{Int,Int}[], K)
     while true 
         append!(S, fill(Tuple{Int,Int}[], d2-d1+1))
         for i = d1:d2
@@ -112,15 +140,24 @@ function FreeLieAlgebra(N::Int; lyndon_basis::Bool=false)
 
     kappa = zeros(Int, dim)
     sigma = zeros(Int, dim)
-    sigma[1]=1
-    sigma[2]=1
-    for i = 3:dim
+    sigma[1:K] .= 1
+    for i = K+1:dim
         kappa[i] = (p2[p1[i]]==p2[i]) ? kappa[p1[i]]+1 : 1
         sigma[i] = kappa[i]*sigma[p1[i]]*sigma[p2[i]]
     end
 
-    FreeLieAlgebra(N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
+    FreeLieAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
 end
+
+
+function basis_element(L::FreeLieAlgebra, i::Int)
+    if i<=L.K
+        return i-1
+    else
+        return [basis_element(L, L.p1[i]), basis_element(L, L.p2[i])]
+    end
+end
+
 
 mutable struct LieSeries{T}
     L::FreeLieAlgebra

@@ -8,7 +8,8 @@ export lyndon_words, lyndon_basis, rightnormed_basis
 
 export Word, ⋅, wcoeff
 
-export FreeLieAlgebra, LieSeries, generator, commutator, commutator!
+export FreeLieAlgebra, LieSeries, basis_element, generator
+export commutator, commutator!
 export BCH
 
 
