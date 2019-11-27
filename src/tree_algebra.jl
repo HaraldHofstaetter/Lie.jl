@@ -71,36 +71,11 @@ function gen_lyndon_data(K::Int, N::Int)
     p1, p2, nn
 end
 
-function gen_rightnormed_data(K::Int, N::Int)
-    p1 = collect(1:K)
-    p2 = zeros(Int, K)
-    nn = ones(Int, K)
-    wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
-    i = K+1
-    for n=2:N
-        W = lyndon_words(K, n)
-        for j=1:length(W)
-            w = lyndon2rightnormed(W[j])
-            s1 = w[1:1]
-            s2 = w[2:end]
-            wordindex[w]=i
-            push!(p1, wordindex[s1])
-            push!(p2, wordindex[s2])
-            push!(nn, n)
-            i += 1
-        end
-    end
-    p1, p2, nn
-end
 
-
-
-function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false, rightnormed_basis::Bool=false)
+function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
     @assert K>=2
     if lyndon_basis
         p1, p2, nn = gen_lyndon_data(K, N)
-    elseif rightnormed_basis
-        p1, p2, nn = gen_rightnormed_data(K, N)
     else
         p1, p2, nn = gen_hall_data(K, N)
     end
@@ -127,9 +102,9 @@ function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false, rightnormed_ba
             ww = S[w]
             p = length(vv)
             q = length(ww)
-            S[i] = vcat((w,v), 
-                        [(vv[j][1], circ!(T, vv[j][2], w)) for j=1:p], 
-                        [(ww[j][1], circ!(T, v, ww[j][2])) for j=1:q])
+            S[i] = vcat((v,w), # pairs swapped w.r.t eq. (2.14)
+                        [(circ!(T, vv[j][1], w), vv[j][2]) for j=1:p], 
+                        [(circ!(T, v, ww[j][1]), ww[j][2]) for j=1:q])
         end
         ntrees = length(T.T)
         if ntrees==d2
@@ -162,6 +137,11 @@ end
 mutable struct LieSeries{T}
     L::FreeLieAlgebra
     c::Vector{T}
+end
+
+function trafo(G::Vector{Generator}, alpha::LieSeries)
+    sum([(alpha.c[i]/alpha.L.sigma[i])*trafo(G, basis_element(alpha.L, i)) 
+          for i=1:alpha.L.dim if !iszero(alpha.c[i])])
 end
 
 Base.zero(L::FreeLieAlgebra; T::Type=Rational{Int}) = LieSeries{T}(L, zeros(T, L.ntrees))
@@ -205,8 +185,7 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
         if m<order
             h = zero(T)
             for j=1:length(uu)
-                #TODO: Check -= (otherwise even degree trees have wrong sign)
-                h -= alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]]
+                h += alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]]
             end
             gamma.c[i] = h
         end
