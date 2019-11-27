@@ -173,6 +173,28 @@ function Base.show(io::IO, l::LinearCombination)
     end
 end
 
+trafo(G::Vector{Generator}, b::Int) = G[b+1]
+trafo(G::Vector{Generator}, b::Vector) = SimpleCommutator(trafo(G, b[1]), trafo(G, b[2]))
+
+
+function lyndon_basis(G::Vector{Generator}, n::Int)
+    @assert length(G)>1 && allunique(G)
+    [trafo(G, b) for b in lyndon_basis(length(G), n)]
+end
+
+function lyndon_basis(G::Vector{Generator}, nn::Vector{Int})
+    @assert length(G)>1 && allunique(G)
+    vcat([[trafo(G, b) for b in lyndon_basis(length(G), n)] for n in nn]...)
+end
+
+function rightnormed_basis(G::Vector{Generator}, n::Union{Int, Vector{Int}})
+    @assert length(G)>1 && allunique(G)
+    [trafo(G, b) for b in rightnormed_basis(length(G), n)]
+end
+
+
+
+
 
 
 

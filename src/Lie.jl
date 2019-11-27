@@ -4,7 +4,7 @@ export Element, Generator, SimpleCommutator, Commutator
 export Exponential, Product, Id, Term, LinearCombination
 export ZeroElement, Logarithm, terms, factors, exponent
 
-export lyndon_words, lyndon_basis
+export lyndon_words, lyndon_basis, rightnormed_basis
 
 export Word, ⋅, wcoeff
 

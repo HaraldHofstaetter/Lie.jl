@@ -52,6 +52,22 @@ function phi(w::Word, e::Exponential)
     r
 end
 
+function phi(w::Word, l::Logarithm)
+    x = phi(w, l.e)
+    xm1= x - eye(Int, length(w)+1)
+    y = copy(x)
+    r = copy(x)
+    for k=2:length(w)
+        y = xm1*y
+        if iszero(y)
+            break
+        end
+        r += ((-1)^(k+1)//k)*y
+    end
+    r
+end
+
+
 phi(w::Word, g::Generator, v::Vector) = vcat([(w[j]==g ? v[j+1] : 0) for j=1:length(w)],0)
 phi(w::Word, t::Term, v::Vector) = t.c .* phi(w, t.e, v)
 phi(w::Word, l::LinearCombination, v::Vector) = sum([phi(w, t, v) for t in terms(l)])
@@ -84,9 +100,10 @@ end
 
 function phi(w::Word, l::Logarithm, v::Vector)
     y = copy(v)
+    lm1 = l.e-Id
     r = copy(v)
     for k=1:length(w)
-        y = phi(w, l.e-Id, y)
+        y = phi(w, lm1, y)
         if iszero(y)
             return r
         end
@@ -96,6 +113,14 @@ function phi(w::Word, l::Logarithm, v::Vector)
 end
 
 
-wcoeff(w::Word, S::Element; T::Type=Int) = phi(w, S, vcat(zeros(T,length(w)), one(T)))[1] 
-wcoeff(W::Array{Word,1}, S::Element; T::Type=Int) = [wcoeff(w, S, T=T) for w in W]
+wcoeff(w::Word, S::Element; T::Type=Rational{Int}) = phi(w, S, vcat(zeros(T,length(w)), one(T)))[1] 
+#wcoeff(W::Array{Word,1}, S::Element; T::Type=Rational{Int}) = [wcoeff(w, S, T=T) for w in W]
+
+function wcoeff(W::Array{Word,1}, S::Element; T::Type=Rational{Int}) 
+    c = zeros(T, length(W))
+    Threads.@threads for i=1:length(W)
+        c[i] = wcoeff(W[i], S, T=T)
+    end
+    c
+end
 
