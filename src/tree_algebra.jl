@@ -200,13 +200,12 @@ function commutator(alpha::LieSeries{T}, beta::LieSeries{T}) where T
     gamma
 end
 
-function BCH(L::FreeLieAlgebra; T::Type=Rational{Int}, verbose::Bool=false)
+function BCH(L::FreeLieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Float64=time())
     bernoulli_numbers = [ -1//2, 1//6, 0//1, -1//30, 0//1, 1//42, 0//1, -1//30, 0//1, 
        5//66, 0//1, -691//2730, 0//1, 7//6, 0//1, -3617//510, 0//1, 43867//798, 0//1, 
        -174611//330, 0//1, 854513//138, 0//1, -236364091//2730, 0//1, 8553103//6, 0//1, 
        -23749461029//870, 0//1, 8615841276005//14322]
     
-    t0 = time()
     H = zero(L, T=T)
     U = zero(L, T=T)
     V = zero(L, T=T)
@@ -251,3 +250,17 @@ function BCH(L::FreeLieAlgebra; T::Type=Rational{Int}, verbose::Bool=false)
 end
 
 
+function BCH(G::Vector{Generator}, N::Int; 
+             T::Type=Rational{Int}, lyndon_basis::Bool=false, verbose::Bool=false)
+    @assert length(G)==2 && allunique(G)
+    t0 = time()
+    if verbose
+        print("initializing...")
+    end
+    L = FreeLieAlgebra(2, N, lyndon_basis=lyndon_basis)
+    if verbose
+        println(" time=", time()-t0)
+    end
+    Z = BCH(L, T=T, verbose=verbose, t0=t0)
+    trafo(G, Z)
+end             
