@@ -45,22 +45,78 @@ function gen_brackets(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
     end
 end
 
+function gen_brackets_and_homogenity_class(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
+    if l==r
+        return a[l+1], [1, a[l+1], nothing, nothing]
+    else
+        s = split[l,r]
+        bl, L = gen_brackets_and_homogenity_class(l, s-1, a, split)
+        br, R = gen_brackets_and_homogenity_class(s, r, a, split)
+        return [bl, br], [r-l+1, L[2]+R[2], L, R] 
+    end
+end
+
+function coeff(w::Vector{Int}, l::Int, r::Int, H::Vector)
+    if l==r
+        return  w[r]==H[2] ? 1 : 0
+    elseif sum(w[l:r]) != H[2]
+        return 0
+    else
+        L = H[3]
+        R = H[4]
+        m1 = L[1]
+        m2 = R[1]
+        if m1>m2
+            c1 = coeff(w, l, l+m1-1, L)
+            if c1 !=0
+                c1 *= coeff(w, l+m1, r, R)
+            end
+            c2 = coeff(w, l+m2, r, L)
+            if c2 !=0
+                c2 *= coeff(w, l, l+m2-1, R)
+            end
+        else
+            c1 = coeff(w, l+m1, r, R)
+            if c1 !=0
+                c1 *= coeff(w, l, l+m1-1, L)
+            end
+            c2 = coeff(w, l, l+m2-1, R)
+            if c2 !=0
+                c2 *= coeff(w, l+m2, r, L)
+            end
+        end
+        return c1 - c2 
+    end
+end
+
 
 function genLB(k::Int, n:: Int, t::Int, 
         p::Vector{Int}, split::Matrix{Int}, a::Vector{Int}; 
         W::Union{Nothing, Vector{Vector{Int}}}=nothing, 
         f::Union{Nothing, Vector{Int}}=nothing, 
-        B::Union{Nothing, Vector{Any}}=nothing)
+        B::Union{Nothing, Vector{Any}}=nothing,
+        T::Union{Nothing, Vector{Vector{Tuple{Int,Int}}}}=nothing)
     if t>n
         if p[1]==n
-            if !isnothing(W)
+            if !isnothing(W) && isnothing(T)
                 push!(W, a[2:end])
             end
             if !isnothing(f)
                 push!(f, split[1,n])
             end
-            if !isnothing(B)
+            if !isnothing(B) && isnothing(T)
                 push!(B, gen_brackets(1, n, a, split))
+            end
+            if !isnothing(T)
+                b, H = gen_brackets_and_homogenity_class(1, n, a, split)
+                push!(B, b)
+                j = length(B)
+                Threads.@threads for i=j+1:length(W)
+                    c = coeff(W[i], 1, n, H)
+                    if c!=0
+                        push!(T[i], (j,c))
+                    end
+                end
             end
         end
     else
@@ -82,7 +138,7 @@ function genLB(k::Int, n:: Int, t::Int,
                     split[i,t] = split[i+1,t]
                 end 
             end
-            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B)
+            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B, T=T)
             p = copy(q)
         end
     end
@@ -114,6 +170,17 @@ function lyndon_words_factored(k::Int, n::Int)
     W,f
 end
 
+function lyndon_words_basis_trafo(k::Int, n::Int)
+    @assert k==2
+    a = zeros(Int, n+1)
+    W = lyndon_words(k, n)
+    p = ones(Int, n)
+    split = zeros(Int, n, n)
+    B = Any[]
+    T = [Tuple{Int,Int}[] for i=1:length(W)]
+    genLB(k, n, 1, p, split, a, W=W, B=B, T=T)
+    W,B,T
+end
 
 
 
