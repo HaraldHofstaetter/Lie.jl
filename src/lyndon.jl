@@ -45,78 +45,21 @@ function gen_brackets(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
     end
 end
 
-function gen_brackets_and_homogenity_class(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
-    if l==r
-        return a[l+1], [1, a[l+1], nothing, nothing]
-    else
-        s = split[l,r]
-        bl, L = gen_brackets_and_homogenity_class(l, s-1, a, split)
-        br, R = gen_brackets_and_homogenity_class(s, r, a, split)
-        return [bl, br], [r-l+1, L[2]+R[2], L, R] 
-    end
-end
-
-function coeff(w::Vector{Int}, l::Int, r::Int, H::Vector)
-    if l==r
-        return  w[r]==H[2] ? 1 : 0
-    elseif sum(w[l:r]) != H[2]
-        return 0
-    else
-        L = H[3]
-        R = H[4]
-        m1 = L[1]
-        m2 = R[1]
-        if m1>m2
-            c1 = coeff(w, l, l+m1-1, L)
-            if c1 !=0
-                c1 *= coeff(w, l+m1, r, R)
-            end
-            c2 = coeff(w, l+m2, r, L)
-            if c2 !=0
-                c2 *= coeff(w, l, l+m2-1, R)
-            end
-        else
-            c1 = coeff(w, l+m1, r, R)
-            if c1 !=0
-                c1 *= coeff(w, l, l+m1-1, L)
-            end
-            c2 = coeff(w, l, l+m2-1, R)
-            if c2 !=0
-                c2 *= coeff(w, l+m2, r, L)
-            end
-        end
-        return c1 - c2 
-    end
-end
-
-
 function genLB(k::Int, n:: Int, t::Int, 
         p::Vector{Int}, split::Matrix{Int}, a::Vector{Int}; 
         W::Union{Nothing, Vector{Vector{Int}}}=nothing, 
         f::Union{Nothing, Vector{Int}}=nothing, 
-        B::Union{Nothing, Vector{Any}}=nothing,
-        T::Union{Nothing, Vector{Vector{Tuple{Int,Int}}}}=nothing)
+        B::Union{Nothing, Vector{Any}}=nothing)
     if t>n
         if p[1]==n
-            if !isnothing(W) && isnothing(T)
+            if !isnothing(W) 
                 push!(W, a[2:end])
             end
             if !isnothing(f)
                 push!(f, split[1,n])
             end
-            if !isnothing(B) && isnothing(T)
+            if !isnothing(B)
                 push!(B, gen_brackets(1, n, a, split))
-            end
-            if !isnothing(T)
-                b, H = gen_brackets_and_homogenity_class(1, n, a, split)
-                push!(B, b)
-                j = length(B)
-                Threads.@threads for i=j+1:length(W)
-                    c = coeff(W[i], 1, n, H)
-                    if c!=0
-                        push!(T[i], (j,c))
-                    end
-                end
             end
         end
     else
@@ -138,7 +81,7 @@ function genLB(k::Int, n:: Int, t::Int,
                     split[i,t] = split[i+1,t]
                 end 
             end
-            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B, T=T)
+            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B)
             p = copy(q)
         end
     end
@@ -170,17 +113,163 @@ function lyndon_words_factored(k::Int, n::Int)
     W,f
 end
 
-function lyndon_words_basis_trafo(k::Int, n::Int)
-    @assert k==2
+
+function lyndon_words_and_basis_factored(k::Int, n::Int)
     a = zeros(Int, n+1)
-    W = lyndon_words(k, n)
+    W = Vector{Int}[]
     p = ones(Int, n)
     split = zeros(Int, n, n)
+    f = Int[]
     B = Any[]
-    T = [Tuple{Int,Int}[] for i=1:length(W)]
-    genLB(k, n, 1, p, split, a, W=W, B=B, T=T)
-    W,B,T
+    genLB(k, n, 1, p, split, a, W=W, B=B, f=f)
+    W, B, f
 end
+
+
+
+function hom_class(K::Int, w::Vector{Int}, l::Int, r::Int)
+    h = zeros(Int, K)
+    for i=l:r 
+        h[w[i]+1] += 1
+    end
+    h
+end
+
+
+function word_to_index(K::Int, w::Vector{Int}, l::Int, r::Int)
+    x = w[r]
+    y = K
+    for j=r-1:-1:l
+        x += w[j]*y
+        y *= K
+    end
+    x
+end
+
+
+function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int, 
+               p1::Vector{Int}, p2::Vector{Int}, 
+               nn::Vector{Int}, h::Vector{Vector{Int}},
+               HT::Dict{Tuple{Int, Int, Int}, Int}, M::Int)
+    if l==r 
+        return w[l]==j-1 ? 1 : 0
+    end
+
+    if r-l+1<=M # use hash table
+        return get(HT, (j, r-l+1, word_to_index(K, w, l, r)), 0)  
+    end
+
+    if hom_class(K,w,l,r)!=h[j]
+        return 0
+    end
+
+    m1 = nn[p1[j]]
+    m2 = nn[p2[j]]
+
+    if m1<m2
+        c1 = coeff(K, w, l, l+m1-1, p1[j], p1, p2, nn, h, HT, M)
+        if c1!=0
+            c1 *= coeff(K, w, l+m1, r, p2[j], p1, p2, nn, h, HT, M)
+        end
+    
+        c2 = coeff(K, w, l+m2, r,  p1[j], p1, p2, nn, h, HT, M)
+        if c2!=0
+            c2 *= coeff(K, w, l, l+m2-1, p2[j], p1, p2, nn, h, HT, M)
+        end
+    else
+        c1 = coeff(K, w, l+m1, r, p2[j], p1, p2, nn, h, HT, M)
+        if c1!=0
+            c1 *= coeff(K, w, l, l+m1-1, p1[j], p1, p2, nn, h, HT, M)
+        end
+    
+        c2 = coeff(K, w, l, l+m2-1, p2[j], p1, p2, nn, h, HT, M)
+        if c2!=0
+            c2 *= coeff(K, w, l+m2, r,  p1[j], p1, p2, nn, h, HT, M)
+        end
+    end
+
+    c1 - c2
+end
+
+function lyndon_words_basis_trafo(K::Int, N::Int; verbose::Bool=false, M::Int=5)
+    t0 = time()
+    if verbose
+        print("initializing...")
+    end
+    WW = [[c] for c=0:K-1]
+    BB = Any[c for c=0:K-1]
+    p1 = collect(1:K)
+    p2 = zeros(Int, K)
+    nn = ones(Int, K)
+    hh = [hom_class(K, [c], 1, 1) for c=0:K-1]
+    wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
+    index = K+1
+    ii = zeros(Int, N)
+    ii[1] = index 
+    for n=2:N
+        W,B,f = lyndon_words_and_basis_factored(K, n)
+        for j=1:length(W)
+            w = W[j]
+            s1 = w[1:f[j]-1]
+            s2 = w[f[j]:end]
+            wordindex[w]=index
+            push!(p1, wordindex[s1])
+            push!(p2, wordindex[s2])
+            push!(nn, n)
+            push!(hh, hom_class(K, w, 1, n))
+            index += 1
+        end
+        append!(WW, W)
+        append!(BB, B)
+        ii[n] = index
+    end
+    if verbose
+        println("time=", time()-t0)
+    end
+
+    HT = Dict{Tuple{Int, Int, Int}, Int}()
+    for n=2:M
+        j1 = ii[n-1]
+        j2 = ii[n]-1 
+        for k=0:K^n-1
+            w = [parse(Int, c) for c in string(k, base=K, pad=n)]
+            for j=j1:j2
+                c = coeff(K, w, 1, n, j, p1, p2, nn, hh, HT, n-1)
+                if c!=0
+                    HT[(j, n, k)] = c
+                end
+            end
+        end
+    end
+
+
+    T = [Tuple{Int,Int}[] for i=1:ii[N]]
+    for n=2:N
+        if verbose
+            print("n=$n: ")
+        end
+        j1 = ii[n-1]
+        j2 = ii[n]-1 
+        Threads.@threads for j=j1:j2
+            for i=j+1:j2
+                c = coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, HT, M)
+                if c!=0
+                    push!(T[i], (j,c))
+                end
+            end
+        end
+        if verbose
+            println("time=", time()-t0)
+        end
+    end
+
+    WW, BB, T, HT
+end
+
+
+
+
+
 
 
 
@@ -299,3 +388,5 @@ end
 
 rightnormed_basis(k::Integer, n::Union{Int, Vector{Int}}) = 
   [rightnormed_bracketing(lyndon2rightnormed(w))  for w in lyndon_words(k, n)]
+
+

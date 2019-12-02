@@ -49,6 +49,7 @@ function gen_hall_data(K::Int, N::Int)
     p1, p2, nn
 end
 
+
 function gen_lyndon_data(K::Int, N::Int)
     p1 = collect(1:K)
     p2 = zeros(Int, K)
@@ -68,7 +69,7 @@ function gen_lyndon_data(K::Int, N::Int)
             i += 1
         end
     end
-    p1, p2, nn
+    return p1, p2, nn
 end
 
 
