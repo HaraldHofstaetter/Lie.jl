@@ -181,14 +181,14 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
     @assert gamma!=alpha && gamma!=beta
     L = alpha.L
     Threads.@threads for i=1:L.ntrees
-        uu = L.S[i]
+        @inbounds uu = L.S[i]
         m = length(uu) 
         if m<order
             h = zero(T)
             for j=1:length(uu)
-                h += alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]]
+                @inbounds h += alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]]
             end
-            gamma.c[i] = h
+            @inbounds gamma.c[i] = h
         end
     end
 end
