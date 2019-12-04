@@ -23,8 +23,8 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
                nn::Vector{Int}, h::Vector{Vector{Int}},
                H::Matrix{Vector{Int}},
                W2I::Matrix{Int},
-               #HT::Dict{Tuple{Int, Int}, Int},
-               HT::Matrix{Int},
+               #CT::Dict{Tuple{Int, Int}, Int},
+               CT::Matrix{Int},
                M::Int)
     if l==r 
         return @inbounds w[l]==j-1 ? 1 : 0
@@ -34,9 +34,9 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
         return 0
     end
 
-    if r-l+1<=M # use hash table
-        #return get(HT, (j, W2I[l,r]), 0)  
-        return @inbounds HT[j, W2I[l,r]]
+    if r-l+1<=M # use lookup table
+        #return get(CT, (j, W2I[l,r]), 0)  
+        return @inbounds CT[j, W2I[l,r]]
     end
 
 @inbounds j1 =p1[j]
@@ -45,24 +45,24 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
 @inbounds m2 = nn[j2]
 
     if m1<m2
-        c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, HT, M)
+        c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, CT, M)
         if c1!=0
-            c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, HT, M)
+            c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, CT, M)
         end
     
-        c2 = coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, HT, M)
+        c2 = coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, CT, M)
         if c2!=0
-            c2 *= coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, HT, M)
+            c2 *= coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, CT, M)
         end
     else
-        c1 = coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, HT, M)
+        c1 = coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, CT, M)
         if c1!=0
-            c1 *= coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, HT, M)
+            c1 *= coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, CT, M)
         end
     
-        c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, HT, M)
+        c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, CT, M)
         if c2!=0
-            c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, HT, M)
+            c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, CT, M)
         end
     end
 
@@ -107,8 +107,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         ii[n] = index
     end
 
-    # generate hash table
-    #HT = Dict{Tuple{Int, Int}, Int}()
+    # generate coefficients lookup table
+
+    #CT = Dict{Tuple{Int, Int}, Int}()
     #for n=1:M
     #    j1 = n==1 ? 1 : ii[n-1]
     #    j2 = ii[n]-1 
@@ -119,15 +120,15 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     #                                             for l=1:n, r=1:n]
     #        wi = word_to_index(K, w, 1, n)
     #        for j=j1:j2
-    #            c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, HT, n-1)
+    #            c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, CT, n-1)
     #            if c!=0
-    #                HT[(j, wi)] = c
+    #                CT[(j, wi)] = c
     #            end
     #        end
     #    end
     #end
 
-    HT = zeros(Int, M==0 ? 0 : ii[M]-1, div(K^(M+1)-1, K-1)-1)
+    CT = zeros(Int, M==0 ? 0 : ii[M]-1, div(K^(M+1)-1, K-1)-1)
     for n=1:M
         j1 = n==1 ? 1 : ii[n-1]
         j2 = ii[n]-1 
@@ -138,9 +139,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                                                  for l=1:n, r=1:n]
             wi = word_to_index(K, w, 1, n)
             for j=j1:j2
-                c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, HT, n-1)
+                c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, CT, n-1)
                 if c!=0
-                    HT[j, wi] = c
+                    CT[j, wi] = c
                 end
             end
         end
@@ -175,7 +176,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                  for j=1:i-1
                  if h==hh[j]
                      if !iszero(cc[j])
-                         cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, M2I, HT, M)*cc[j]
+                         cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, M2I, CT, M)*cc[j]
                      end
                  end
                  end
