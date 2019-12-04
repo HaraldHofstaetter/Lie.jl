@@ -161,25 +161,27 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         print("coeffs of basis elements...")
     end
 
-    Threads.@threads for h in unique(hh)
-       j1 = findfirst(x->x==h, hh)
-       j2 = findlast(x->x==h, hh)
-       for i=j1:j2
-       if h==hh[i]
-            n = nn[i]
-            w = Word(G[WW[i] .+ 1])
-            H = Vector{Int}[l<=r ? hom_class(K, WW[i], l,r) : [0,0] for l=1:n, r=1:n]
-            M2I = Int[l<=r && r-l+1<=M ? word_to_index(K, WW[i], l,r) : 0 
-                                                 for l=1:n, r=1:n]
-            for j=1:i-1
-            if h==hh[j]
-                if !iszero(cc[j])
-                    cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, M2I, HT, M)*cc[j]
-                end
-            end
-            end
-        end
-        end
+    for n=1:N
+        j1 = n==1 ? 1 : ii[n-1]
+        j2 = ii[n]-1 
+        hu = unique(hh[j1:j2])
+        Threads.@threads for h in hu 
+            for i=j1:j2
+            if h==hh[i]
+                 w = Word(G[WW[i] .+ 1])
+                 H = Vector{Int}[l<=r ? hom_class(K, WW[i], l,r) : [0,0] for l=1:n, r=1:n]
+                 M2I = Int[l<=r && r-l+1<=M ? word_to_index(K, WW[i], l,r) : 0 
+                                                      for l=1:n, r=1:n]
+                 for j=1:i-1
+                 if h==hh[j]
+                     if !iszero(cc[j])
+                         cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, M2I, HT, M)*cc[j]
+                     end
+                 end
+                 end
+             end
+             end
+         end
     end
 
     if verbose
