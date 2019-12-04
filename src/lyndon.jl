@@ -273,6 +273,7 @@ function lyndon_basis_coeffs(G::Vector{Generator}, S::Element, N::Int;
 
     if verbose
         println("time=", time()-t0)
+        print("coeffs of basis elements...")
     end
 
     Threads.@threads for h in unique(hh)
@@ -294,6 +295,10 @@ function lyndon_basis_coeffs(G::Vector{Generator}, S::Element, N::Int;
             end
         end
         end
+    end
+
+    if verbose
+        println("time=", time()-t0)
     end
 
     WW, p1, p2, nn, cc, hh 
