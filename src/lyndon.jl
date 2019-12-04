@@ -187,8 +187,9 @@ end
 
 
 
-function lyndon_basis_coeffs(G::Vector{Generator}, S::Element, N::Int; 
-               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0)
+function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
+               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0, 
+               lists_output::Bool=false)
     t0 = time()
     if verbose
         print("initializing...")
@@ -300,8 +301,12 @@ function lyndon_basis_coeffs(G::Vector{Generator}, S::Element, N::Int;
     if verbose
         println("time=", time()-t0)
     end
-
-    WW, p1, p2, nn, cc, hh 
+    
+    if lists_output
+        return p1, p2, nn, cc
+    else
+        return gen_expression(G, cc, p1, p2)
+    end
 end
 
 

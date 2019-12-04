@@ -16,7 +16,7 @@ circ!(RT::ColoredRootedTree, t1::Vector{Int}, t2::Vector{Int}) = new_tree!(RT, v
 
 circ!(RT::ColoredRootedTree, t1::Int, t2::Int) =   circ!(RT, RT.T[t1], RT.T[t2])
 
-mutable struct FreeLieAlgebra
+mutable struct TreeAlgebra
     K::Int # number of generators
     N::Int # maximum order 
     dim::Int
@@ -26,7 +26,7 @@ mutable struct FreeLieAlgebra
     nn::Vector{Int}
     sigma::Vector{Int}
     S::Vector{Vector{Tuple{Int,Int}}}
-    #T::ColoredRootedTree # only needed for generating S, not for calculations with LieSeries
+    #T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
 end
 
 function gen_hall_data(K::Int, N::Int)
@@ -73,7 +73,7 @@ function gen_lyndon_data(K::Int, N::Int)
 end
 
 
-function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
+function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
     @assert K>=2
     if lyndon_basis
         p1, p2, nn = gen_lyndon_data(K, N)
@@ -122,60 +122,47 @@ function FreeLieAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         sigma[i] = kappa[i]*sigma[p1[i]]*sigma[p2[i]]
     end
 
-    FreeLieAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
+    TreeAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
 end
 
 
-function basis_element(L::FreeLieAlgebra, i::Int)
-    if i<=L.K
-        return i-1
-    else
-        return [basis_element(L, L.p1[i]), basis_element(L, L.p2[i])]
-    end
-end
-
-
-mutable struct LieSeries{T}
-    L::FreeLieAlgebra
+mutable struct TreeSeries{T}
+    L::TreeAlgebra
     c::Vector{T}
 end
 
-function trafo(G::Vector{Generator}, alpha::LieSeries)
-    sum([(alpha.c[i]/alpha.L.sigma[i])*trafo(G, basis_element(alpha.L, i)) 
-          for i=1:alpha.L.dim if !iszero(alpha.c[i])])
-end
 
-Base.zero(L::FreeLieAlgebra; T::Type=Rational{Int}) = LieSeries{T}(L, zeros(T, L.ntrees))
+Base.zero(L::TreeAlgebra; T::Type=Rational{Int}) = TreeSeries{T}(L, zeros(T, L.ntrees))
 
-function generator(L::FreeLieAlgebra, k:: Int; T::Type=Rational{Int}) 
+function generator(L::TreeAlgebra, k:: Int; T::Type=Rational{Int}) 
     c = zeros(T, L.ntrees)
     c[k] = 1
-    LieSeries{T}(L,c)
+    TreeSeries{T}(L,c)
 end
 
 import Base.+
-function +(alpha::LieSeries{T}, beta::LieSeries{T}) where T
+function +(alpha::TreeSeries{T}, beta::TreeSeries{T}) where T
     @assert alpha.L == beta.L
-    LieSeries{T}(alpha.L, alpha.c+beta.c)
+    TreeSeries{T}(alpha.L, alpha.c+beta.c)
 end
 
 import Base.*
-*(f, alpha::LieSeries{T}) where T = LieSeries{T}(alpha.L, f*alpha.c)
+*(f, alpha::TreeSeries{T}) where T = TreeSeries{T}(alpha.L, f*alpha.c)
 
 import LinearAlgebra: axpy!
 
-function axpy!(a, X::LieSeries{T}, Y::LieSeries{T}) where T
+function axpy!(a, X::TreeSeries{T}, Y::TreeSeries{T}) where T
     @assert X.L == X.L
     axpy!(a, X.c, Y.c)
 end
 
 import Base: copyto!
-function copyto!(dest::LieSeries{T}, src::LieSeries{T}) where T
+function copyto!(dest::TreeSeries{T}, src::TreeSeries{T}) where T
     @assert dest.L == src.L
     copyto!(dest.c, src.c)
 end
 
-function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T}; 
+function commutator!(gamma::TreeSeries{T}, alpha::TreeSeries{T}, beta::TreeSeries{T}; 
                      order::Int=alpha.L.N) where T
     @assert alpha.L == beta.L && alpha.L == gamma.L
     @assert gamma!=alpha && gamma!=beta
@@ -194,14 +181,14 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
 end
 
 
-function commutator(alpha::LieSeries{T}, beta::LieSeries{T}) where T
+function commutator(alpha::TreeSeries{T}, beta::TreeSeries{T}) where T
     @assert alpha.L == beta.L
     gamma = zero(alpha.L, T=T)
     commutator!(gamma, alpha, beta)
     gamma
 end
 
-function BCH(L::FreeLieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Float64=time())
+function BCH(L::TreeAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Float64=time())
     bernoulli_numbers = [ -1//2, 1//6, 0//1, -1//30, 0//1, 1//42, 0//1, -1//30, 0//1, 
        5//66, 0//1, -691//2730, 0//1, 7//6, 0//1, -3617//510, 0//1, 43867//798, 0//1, 
        -174611//330, 0//1, 854513//138, 0//1, -236364091//2730, 0//1, 8553103//6, 0//1, 
@@ -258,10 +245,10 @@ function BCH(G::Vector{Generator}, N::Int;
     if verbose
         print("initializing...")
     end
-    L = FreeLieAlgebra(2, N, lyndon_basis=lyndon_basis)
+    L = TreeAlgebra(2, N, lyndon_basis=lyndon_basis)
     if verbose
         println(" time=", time()-t0)
     end
     Z = BCH(L, T=T, verbose=verbose, t0=t0)
-    trafo(G, Z)
+    gen_expression(G, Z.c[1:L.dim] ./ L.sigma, L.p1, L.p2)
 end             

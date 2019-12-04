@@ -113,10 +113,10 @@ function phi(w::Word, l::Logarithm, v::Vector)
 end
 
 
-wcoeff(w::Word, S::Element; T::Type=Rational{Int}) = phi(w, S, vcat(zeros(T,length(w)), one(T)))[1] 
-#wcoeff(W::Array{Word,1}, S::Element; T::Type=Rational{Int}) = [wcoeff(w, S, T=T) for w in W]
+wcoeff(w::Word, S::AlgebraElement; T::Type=Rational{Int}) = phi(w, S, vcat(zeros(T,length(w)), one(T)))[1] 
+#wcoeff(W::Array{Word,1}, S::AlgebraElement; T::Type=Rational{Int}) = [wcoeff(w, S, T=T) for w in W]
 
-function wcoeff(W::Array{Word,1}, S::Element; T::Type=Rational{Int}) 
+function wcoeff(W::Array{Word,1}, S::AlgebraElement; T::Type=Rational{Int}) 
     c = zeros(T, length(W))
     Threads.@threads for i=1:length(W)
         c[i] = wcoeff(W[i], S, T=T)

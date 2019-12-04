@@ -1,6 +1,6 @@
-abstract type Element end
+abstract type AlgebraElement end
 
-struct Generator <: Element
+struct Generator <: AlgebraElement
     name   ::String
     degree ::Int
     function Generator(name, degree)
@@ -13,14 +13,14 @@ Generator(name::String) = Generator(name, 1)
 
 Base.show(io::IO, g::Generator) = print(io, g.name)
 
-struct SimpleCommutator <: Element 
-    x::Element
-    y::Element
+struct SimpleCommutator <: AlgebraElement 
+    x::AlgebraElement
+    y::AlgebraElement
 end
 
 Base.show(io::IO, sc::SimpleCommutator) = print(io, "[", sc.x, ",", sc.y, "]")
 
-Commutator(g::Element) = g
+Commutator(g::AlgebraElement) = g
 Commutator(x, y) = SimpleCommutator(Commutator(x), Commutator(y))
 Commutator(x::Tuple) = SimpleCommutator(Commutator(x[1]),Commutator(x[2]))
 
@@ -30,35 +30,35 @@ function Commutator(x::Vector)
 end
 
 
-struct Exponential <: Element
-    e::Element
+struct Exponential <: AlgebraElement
+    e::AlgebraElement
 end
 
 exponent(e::Exponential) = e.e
 
-Base.exp(e::Element) = Exponential(e)
+Base.exp(e::AlgebraElement) = Exponential(e)
 Base.show(io::IO, e::Exponential) = print(io, "exp(", e.e, ")")
 
 
-struct Logarithm <: Element
-    e::Element
+struct Logarithm <: AlgebraElement
+    e::AlgebraElement
 end
 
-Base.log(e::Element) = Logarithm(e)
+Base.log(e::AlgebraElement) = Logarithm(e)
 Base.show(io::IO, e::Logarithm) = print(io, "log(", e.e, ")")
 
 
 
-struct Product <: Element
-    p::Array{Element,1}    
+struct Product <: AlgebraElement
+    p::Array{AlgebraElement,1}    
 end
 #Note factors stored form right to left
 
 factors(p::Product) = p.p
 
 const Id = Product([])
-Base.one(::Type{T}) where {T<:Element} = Id
-Base.one(x::T) where {T<:Element} = one(T)
+Base.one(::Type{T}) where {T<:AlgebraElement} = Id
+Base.one(x::T) where {T<:AlgebraElement} = one(T)
 
 function Base.show(io::IO, p::Product) 
     if length(p.p)==0
@@ -81,13 +81,13 @@ end
 
 
 
-struct Term <: Element
+struct Term <: AlgebraElement
     c::Any
-    e::Element
+    e::AlgebraElement
 end
 
 Base.convert(::Type{Term}, t::Term) = t
-Base.convert(::Type{Term}, e::Element) = Term(1, e)
+Base.convert(::Type{Term}, e::AlgebraElement) = Term(1, e)
 
 
 function Base.show(io::IO, t::Term)
@@ -111,57 +111,57 @@ function Base.show(io::IO, t::Term)
 end
 
 
-struct LinearCombination <: Element
+struct LinearCombination <: AlgebraElement
     l::Array{Term,1}    
 end
 
-const ZeroElement = LinearCombination([])
+const ZeroAlgebraElement = LinearCombination([])
 
-Base.zero(::Type{T}) where {T<:Element} = ZeroElement 
-Base.zero(x::T) where {T<:Element} = zero(T)
+Base.zero(::Type{T}) where {T<:AlgebraElement} = ZeroAlgebraElement 
+Base.zero(x::T) where {T<:AlgebraElement} = zero(T)
 
-Base.iszero(x::Element) = false
+Base.iszero(x::AlgebraElement) = false
 Base.iszero(l::LinearCombination) = length(l.l)==0
 Base.iszero(t::Term) = t.c==0 || iszero(t.e)
 
-is_id(e::Element) = false
+is_id(e::AlgebraElement) = false
 is_id(p::Product) = length(factors(p))==0
 is_id(t::Term) = is_id(t.e)&&t.c==1
 
 import Base: (*), /, +, -
 
-*(c, e::Element) = c==1 ? e : Term(c,e)
-*(e::Element, c) = c==1 ? e : Term(c,e)
+*(c, e::AlgebraElement) = c==1 ? e : Term(c,e)
+*(e::AlgebraElement, c) = c==1 ? e : Term(c,e)
 *(c, t::Term) = (c*t.c)*t.e
 *(t::Term, c) = (c*t.c)*t.e
 #*(c, t::Term) = Term(c*t.c,t.e)
 #*(t::Term, c) = Term(c*t.c,t.e)
 
-*(p::Product, x::Element) = Product(vcat(p.p, x))
-*(x::Element, p::Product) = Product(vcat(x, p.p))
+*(p::Product, x::AlgebraElement) = Product(vcat(p.p, x))
+*(x::AlgebraElement, p::Product) = Product(vcat(x, p.p))
 *(p1::Product, p2::Product) = Product(vcat(p1.p, p2.p))
-*(e1::Element, e2::Element) = Product([e1, e2])
+*(e1::AlgebraElement, e2::AlgebraElement) = Product([e1, e2])
 *(p::Product, t::Term) = t.c*(p*t.e)
 *(t::Term, p::Product) = t.c*(t.e*p)
 *(t1::Term, t2::Term) = (t1.c*t2.c)*(t1.e*t2.e)
-*(t::Term, e::Element) = t.c*(t.e*e)
-*(e::Element, t::Term) = t.c*(e*t.e)
+*(t::Term, e::AlgebraElement) = t.c*(t.e*e)
+*(e::AlgebraElement, t::Term) = t.c*(e*t.e)
 
 +(l1::LinearCombination, l2::LinearCombination) = LinearCombination(vcat(l1.l, l2.l))
 +(l::LinearCombination, t::Term) = LinearCombination(vcat(l.l, t))
 +(t::Term, l::LinearCombination) = LinearCombination(vcat(t, l.l))
-+(l::LinearCombination, e::Element) = LinearCombination(vcat(l.l, vcat(convert(Term, e))))
-+(e::Element, l::LinearCombination) = LinearCombination(vcat(vcat(convert(Term, e), l.l)))
++(l::LinearCombination, e::AlgebraElement) = LinearCombination(vcat(l.l, vcat(convert(Term, e))))
++(e::AlgebraElement, l::LinearCombination) = LinearCombination(vcat(vcat(convert(Term, e), l.l)))
 +(t1::Term, t2::Term) =  LinearCombination(vcat(t1, t2))
-+(e1::Element, e2::Element) = LinearCombination(vcat(convert(Term, e1), convert(Term, e2)))
-+(e::Element) = e
++(e1::AlgebraElement, e2::AlgebraElement) = LinearCombination(vcat(convert(Term, e1), convert(Term, e2)))
++(e::AlgebraElement) = e
 -(t::Term) = Term(-t.c, t.e)
--(e::Element) = Term(-1, e)
+-(e::AlgebraElement) = Term(-1, e)
 -(l::LinearCombination) = LinearCombination([-t for t in terms(l)])
--(e1::Element, e2::Element) = e1+(-e2)
+-(e1::AlgebraElement, e2::AlgebraElement) = e1+(-e2)
 
 
-terms(e::Element) = [Term(e)]
+terms(e::AlgebraElement) = [Term(e)]
 terms(x::LinearCombination) = x.l
 
 function Base.show(io::IO, l::LinearCombination) 
@@ -173,24 +173,45 @@ function Base.show(io::IO, l::LinearCombination)
     end
 end
 
-trafo(G::Vector{Generator}, b::Int) = G[b+1]
-trafo(G::Vector{Generator}, b::Vector) = SimpleCommutator(trafo(G, b[1]), trafo(G, b[2]))
+gen_expression(G::Vector{Generator}, b::Int) = G[b+1]
+gen_expression(G::Vector{Generator}, b::Vector) = 
+    SimpleCommutator(gen_expression(G, b[1]), gen_expression(G, b[2]))
+
+
+function basis_element(K::Int, i::Int, p1::Vector{Int}, p2::Vector{Int})
+    if i<=K
+        return i-1
+    else
+        return [basis_element(K, p1[i], p1, p2), 
+                basis_element(K, p2[i], p1, p2)]
+    end
+end
+
+function gen_expression(G::Vector{Generator}, c::Vector, p1::Vector{Int}, p2::Vector{Int}) 
+    @assert length(G)>=2 && allunique(G)
+    K = length(G)
+    sum([c[i]*gen_expression(G, basis_element(K, i, p1, p2)) 
+           for i = 1:length(c) if !iszero(c[i])])
+end
+
 
 
 function lyndon_basis(G::Vector{Generator}, n::Int)
     @assert length(G)>1 && allunique(G)
-    [trafo(G, b) for b in lyndon_basis(length(G), n)]
+    [gen_expression(G, b) for b in lyndon_basis(length(G), n)]
 end
 
 function lyndon_basis(G::Vector{Generator}, nn::Vector{Int})
     @assert length(G)>1 && allunique(G)
-    vcat([[trafo(G, b) for b in lyndon_basis(length(G), n)] for n in nn]...)
+    vcat([[gen_expression(G, b) for b in lyndon_basis(length(G), n)] for n in nn]...)
 end
 
 function rightnormed_basis(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     @assert length(G)>1 && allunique(G)
-    [trafo(G, b) for b in rightnormed_basis(length(G), n)]
+    [gen_expression(G, b) for b in rightnormed_basis(length(G), n)]
 end
+
+
 
 
 
