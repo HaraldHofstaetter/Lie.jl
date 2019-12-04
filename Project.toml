@@ -2,3 +2,9 @@ name = "Lie"
 uuid = "1128b916-998e-43b1-a9c0-49d8a1ebe635"
 authors = ["HaraldHofstaetter <hofi@harald-hofstaetter.at>"]
 version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[compat]
+julia = "≥ 1.0.0"
