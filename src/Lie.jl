@@ -1,6 +1,6 @@
 module Lie
 
-export Element, Generator, SimpleCommutator, Commutator
+export AlgebraElement, Generator, SimpleCommutator, Commutator
 export Exponential, Product, Id, Term, LinearCombination
 export ZeroElement, Logarithm, terms, factors, exponent
 
