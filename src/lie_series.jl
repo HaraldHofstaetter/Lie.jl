@@ -72,7 +72,7 @@ end
 
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0, 
+               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
                lists_output::Bool=false)
     t0 = time()
     if verbose

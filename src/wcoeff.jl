@@ -34,16 +34,17 @@ function lyndon_words_graded(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     [Word(G[w .+ 1]) for w in lyndon_words_graded(n, max_grade=length(G))]
 end
 
+import LinearAlgebra
 
-phi(w::Word, g::Generator) = diagm([a==g ? 1 : 0 for a in w], 1)
+phi(w::Word, g::Generator) = LinearAlgebra.diagm(1 => [a==g ? 1 : 0 for a in w.w])
 phi(w::Word, t::Term) = t.c*phi(w, t.e)
 phi(w::Word, l::LinearCombination) = sum([phi(w, t) for t in terms(l)])
-phi(w::Word, p::Product) = length(factors(p))==0 ? eye(Int,length(w)+1) : prod([phi(w, f) for f in factors(p)])
+phi(w::Word, p::Product) = length(factors(p))==0 ? LinearAlgebra.I : prod([phi(w, f) for f in factors(p)])
 phi(w::Word, c::SimpleCommutator) = phi(w, c.x)*phi(w, c.y)-phi(w, c.y)*phi(w, c.x)
 
 function phi(w::Word, e::Exponential)
     x = phi(w, e.e)
-    @assert iszero(diag(x)) "exponent with constant term"
+    @assert iszero(LinearAlgebra.diag(x)) "exponent with constant term"
     y = copy(x)
     r = copy(x)
     for k=2:length(w)
@@ -53,13 +54,13 @@ function phi(w::Word, e::Exponential)
         end
         r += y*1//factorial(k)
     end
-    r += eye(Int, length(w)+1)
+    r += LinearAlgebra.I 
     r
 end
 
 function phi(w::Word, l::Logarithm)
     x = phi(w, l.e)
-    xm1= x - eye(Int, length(w)+1)
+    xm1= x - LinearAlgebra.I 
     y = copy(x)
     r = copy(x)
     for k=2:length(w)
@@ -128,4 +129,6 @@ function wcoeff(W::Array{Word,1}, S::AlgebraElement; T::Type=Rational{Int})
     end
     c
 end
+
+
 
