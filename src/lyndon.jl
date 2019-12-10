@@ -3,17 +3,45 @@
 #Algorithm 2.1 from
 #  K. Cattell, F. Ruskey, J. Sawada, M. Serra, C.R. Miers, Fast algorithms to generate necklaces, 
 #  unlabeled necklaces and irreducible polynomials over GF(2), J. Algorithms 37 (2) (2000) 267–282
-function genLW(k::Int, n:: Int, t::Int, p::Int, a::Vector{Int}, W::Vector{Vector{Int}})
+
+function transform_to_graded(w::Vector{Int})
+    if w==[0]
+        return Int[]
+    end
+    w1 = Int[]
+    c = 0
+    for x in w[2:end]
+        if x==1
+            c +=1
+        else
+            push!(w1, c)
+            c = 0
+        end
+    end
+    push!(w1, c)
+    w1
+end
+
+
+function genLW(k::Int, n:: Int, t::Int, p::Int, a::Vector{Int}, W::Vector{Vector{Int}}; 
+               max_grade::Int=1)
     if t>n
         if p==n
-            push!(W, a[2:end])
+            if max_grade>1
+                w1 = transform_to_graded(a[2:end])
+                if length(w1)>0 && maximum(w1)<max_grade
+                    push!(W, w1)
+                end
+            else
+                push!(W, a[2:end])
+            end
         end
     else
         a[t+1] = a[t-p+1]
-        genLW(k, n, t+1, p, a, W)
+        genLW(k, n, t+1, p, a, W, max_grade=max_grade)
         for j=a[t-p+1]+1:k-1
             a[t+1] = j
-            genLW(k, n, t+1, t, a, W)
+            genLW(k, n, t+1, t, a, W, max_grade=max_grade)
         end
     end
 end
@@ -29,6 +57,19 @@ function lyndon_words(k::Int, nn::Vector{Int})
     vcat([lyndon_words(k, n) for n in nn]...)
 end
 
+function lyndon_words_graded(n::Int; max_grade::Int=typemax(Int))
+    @assert max_grade > 1
+    a = zeros(Int, n+1)
+    W = Vector{Int}[]
+    genLW(2, n, 1, 1, a, W, max_grade=max_grade)
+    W
+end
+
+function lyndon_words_graded(nn::Vector{Int}; max_grade::Int=typemax(Int))
+    vcat([lyndon_words_graded(n, max_grade=max_grade) for n in nn]...)
+end
+
+
 
 
 ########################################
@@ -36,12 +77,18 @@ end
 #  J. Sawada, F. Ruskey, Generating Lyndon brackets. An addendum to: Fast algorithms 
 #  to generate necklaces, unlabeled necklaces and irreducible polynomials over GF(2),
 #  J. Algorithms 46 (2003) 21–26
-function gen_brackets(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int})
+function gen_brackets(l::Int, r::Int, a::Vector{Int}, split::Matrix{Int}; graded::Bool=false)
     if l==r
-        return a[l+1]
+        if graded 
+            0 
+        else
+            return a[l+1]
+        end
+    elseif graded && a[l+1]==0 && a[l+2:r+1]==ones(Int, r-l)
+        return r-l
     else
-        return [gen_brackets(l, split[l,r]-1, a, split), 
-                gen_brackets(split[l,r], r, a, split)]
+        return [gen_brackets(l, split[l,r]-1, a, split, graded=graded), 
+                gen_brackets(split[l,r], r, a, split, graded=graded)]
     end
 end
 
@@ -49,17 +96,33 @@ function genLB(k::Int, n:: Int, t::Int,
         p::Vector{Int}, split::Matrix{Int}, a::Vector{Int}; 
         W::Union{Nothing, Vector{Vector{Int}}}=nothing, 
         f::Union{Nothing, Vector{Int}}=nothing, 
-        B::Union{Nothing, Vector{Any}}=nothing)
+        B::Union{Nothing, Vector{Any}}=nothing,
+        max_grade::Int=1)
     if t>n
         if p[1]==n
-            if !isnothing(W) 
-                push!(W, a[2:end])
-            end
-            if !isnothing(f)
-                push!(f, split[1,n])
-            end
-            if !isnothing(B)
-                push!(B, gen_brackets(1, n, a, split))
+            if max_grade>1
+                w1 = transform_to_graded(a[2:end])
+                if length(w1)>0 && maximum(w1)<max_grade
+                    if !isnothing(W) 
+                        push!(W, w1)
+                    end
+                    if !isnothing(f)
+                        push!(f, split[1,n]) # TODO: implement correctly for graded...
+                    end
+                    if !isnothing(B)
+                        push!(B, gen_brackets(1, n, a, split, graded=true))
+                    end
+                end
+            else
+                if !isnothing(W) 
+                    push!(W, a[2:end])
+                end
+                if !isnothing(f)
+                    push!(f, split[1,n])
+                end
+                if !isnothing(B)
+                    push!(B, gen_brackets(1, n, a, split))
+                end
             end
         end
     else
@@ -81,7 +144,7 @@ function genLB(k::Int, n:: Int, t::Int,
                     split[i,t] = split[i+1,t]
                 end 
             end
-            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B)
+            genLB(k, n, t+1, p, split, a, W=W, f=f, B=B, max_grade=max_grade)
             p = copy(q)
         end
     end
@@ -99,6 +162,21 @@ end
 
 function lyndon_basis(k::Int, nn::Vector{Int})
     vcat([lyndon_basis(k, n) for n in nn]...)
+end
+
+
+function lyndon_basis_graded(n::Int; max_grade::Int=typemax(Int))
+    @assert max_grade > 1
+    a = zeros(Int, n+1)
+    p = ones(Int, n)
+    split = zeros(Int, n, n)
+    B = Any[]
+    genLB(2, n, 1, p, split, a, B=B, max_grade=max_grade)
+    B
+end
+
+function lyndon_basis_graded(nn::Vector{Int}; max_grade::Int=typemax(Int))
+    vcat([lyndon_basis_graded(n, max_grade=max_grade) for n in nn]...)
 end
 
 
@@ -230,5 +308,8 @@ end
 
 rightnormed_basis(k::Integer, n::Union{Int, Vector{Int}}) = 
   [rightnormed_bracketing(lyndon2rightnormed(w))  for w in lyndon_words(k, n)]
+
+rightnormed_basis_graded(n::Union{Int, Vector{Int}}; max_grade::Int=typemax(Int)) = 
+  [rightnormed_bracketing(lyndon2rightnormed(w))  for w in lyndon_words_graded(n, max_grade=max_grade)]
 
 

@@ -2,14 +2,14 @@ abstract type AlgebraElement end
 
 struct Generator <: AlgebraElement
     name   ::String
-    degree ::Int
-    function Generator(name, degree)
-        @assert degree>=1 "degree has to be >=1"
-        new(name, degree)
-    end
+    #degree ::Int
+    #function Generator(name, degree)
+    #    @assert degree>=1 "degree has to be >=1"
+    #    new(name, degree)
+    #end
 end
 
-Generator(name::String) = Generator(name, 1)
+#Generator(name::String) = Generator(name, 1)
 
 Base.show(io::IO, g::Generator) = print(io, g.name)
 
@@ -195,20 +195,25 @@ function gen_expression(G::Vector{Generator}, c::Vector, p1::Vector{Int}, p2::Ve
 end
 
 
-
-function lyndon_basis(G::Vector{Generator}, n::Int)
+function lyndon_basis(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     @assert length(G)>1 && allunique(G)
     [gen_expression(G, b) for b in lyndon_basis(length(G), n)]
 end
 
-function lyndon_basis(G::Vector{Generator}, nn::Vector{Int})
+function lyndon_basis_graded(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     @assert length(G)>1 && allunique(G)
-    vcat([[gen_expression(G, b) for b in lyndon_basis(length(G), n)] for n in nn]...)
+    [gen_expression(G, b) for b in lyndon_basis_graded(n, max_grade=length(G))]
 end
+
 
 function rightnormed_basis(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     @assert length(G)>1 && allunique(G)
     [gen_expression(G, b) for b in rightnormed_basis(length(G), n)]
+end
+
+function rightnormed_basis_graded(G::Vector{Generator}, n::Union{Int, Vector{Int}})
+    @assert length(G)>1 && allunique(G)
+    [gen_expression(G, b) for b in rightnormed_basis_graded(n, max_grade=length(G))]
 end
 
 

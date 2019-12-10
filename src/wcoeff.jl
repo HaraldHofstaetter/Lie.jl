@@ -29,6 +29,11 @@ function lyndon_words(G::Vector{Generator}, n::Union{Int, Vector{Int}})
     [Word(G[w .+ 1]) for w in lyndon_words(length(G), n)]
 end
 
+function lyndon_words_graded(G::Vector{Generator}, n::Union{Int, Vector{Int}})
+    @assert length(G)>1 && allunique(G)
+    [Word(G[w .+ 1]) for w in lyndon_words_graded(n, max_grade=length(G))]
+end
+
 
 phi(w::Word, g::Generator) = diagm([a==g ? 1 : 0 for a in w], 1)
 phi(w::Word, t::Term) = t.c*phi(w, t.e)
