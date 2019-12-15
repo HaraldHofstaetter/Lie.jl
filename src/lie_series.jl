@@ -218,58 +218,187 @@ function LieAlgebra(K::Int, N::Int; M::Int=0)
 
     p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
 
-    for i=1:length(WW)
-        println("i=$i ---------------------------------")
+    dim = length(WW)
+    S = fill(Tuple{Int,Int,Int}[], dim)
+
+    for n=1:N
+    i1 = n==1 ? 1 : ii[n-1]
+    i2 = ii[n]-1 
+    hu = unique(hh[i1:i2])
+    #Threads.@threads for h in hu 
+    for h in hu
+    m = sum([1 for i=i1:i2 if h==hh[i]])
+    #println("h=$h m=$m ==============================================")
+    XXX = [(j1, j2) for n1 = 1:div(n,2)
+                    for j1 = (n1==1 ? 1 : ii[n1-1]) : ii[n1]-1
+                    for j2 = (n-n1==1 ? 1 : ii[n-n1-1]) : ii[n-n1]-1
+                    if j1<j2 && hh[j1]+hh[j2]==h]
+    #println("XXX=",XXX)
+    cc = zeros(Int, m, length(XXX))
+
+    k = 0
+    for i=i1:i2
+    if h==hh[i]
+        k += 1
+        #println("i=$i k=$k ---------------------------------")
         n = nn[i]
         h = hh[i]
         w = WW[i]
         H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
         W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 for l=1:n, r=1:n]
-        for n1 = 1:div(n,2)
-            n2 = n-n1
-            for j1 = (n1==1 ? 1 : ii[n1-1]) : ii[n1]-1
-            for j2 = (n2==1 ? 1 : ii[n2-1]) : ii[n2]-1
-                if j1<j2 && hh[j1]+hh[j2]==h
-                    c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
-                    if c1!=0
-                        c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
-                    end
-    
-                    c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
-                    if c2!=0
-                        c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
-                    end
-                    c = c1 - c2
-                    if c!=0 
-                        print("($j1, $j2)=>$c, ") 
-                    end
-                end
+        C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) for j=i1:i-1 if h==hh[j]]
+        #println("C=", C)
+        for l = 1:length(XXX)
+            (j1, j2) = XXX[l]
+            n1 = nn[j1]
+            n2 = nn[j2]
+            c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
+            if c1!=0
+                c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
             end
+            c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
+            if c2!=0
+                c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
             end
+            cc[k, l] = c1 - c2 - sum([cc[j, l]*C[j]  for j=1:k-1]) 
         end
-        println()
+        S[i] = [(XXX[l][1], XXX[l][2], cc[k,l]) for l=1:length(XXX) if !iszero(cc[k,l])]
+        #println("cc[k,:]=", cc[k,:])
+        #println("S[i]=", S[i])
+    end
+    end
+    end
     end
 
-#    for n=1:N
-#        i1 = n==1 ? 1 : ii[n-1]
-#        i2 = ii[n]-1 
-#        hu = unique(hh[i1:i2])
-#        Threads.@threads for h in hu 
-#            for i=i1:i2
-#            if h==hh[i]
-#                 H = Vector{Int}[l<=r ? hom_class(K, WW[i], l,r) : [0,0] for l=1:n, r=1:n]
-#                 M2I = Int[l<=r && r-l+1<=M ? word_to_index(K, WW[i], l,r) : 0 
-#                                                      for l=1:n, r=1:n]
-#                 for j=i1:i-1
-#                 if h==hh[j]
-#                     if !iszero(cc[j])
-#                         cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, M2I, CT, M)*cc[j]
-#                     end
-#                 end
-#                 end
-#             end
-#             end
-#         end
-#    end
-    
+    LieAlgebra(K, N, dim, p1, p2, nn, S) 
 end
+
+
+mutable struct LieSeries{T}
+    L::LieAlgebra
+    c::Vector{T}
+end
+
+
+Base.zero(L::LieAlgebra; T::Type=Rational{Int}) = LieSeries{T}(L, zeros(T, L.dim))
+
+function generator(L::LieAlgebra, k:: Int; T::Type=Rational{Int}) 
+    c = zeros(T, L.dim)
+    c[k] = 1
+    LieSeries{T}(L,c)
+end
+
+import Base.+
+function +(alpha::LieSeries{T}, beta::LieSeries{T}) where T
+    @assert alpha.L == beta.L
+    LieSeries{T}(alpha.L, alpha.c+beta.c)
+end
+
+import Base.*
+*(f, alpha::LieSeries{T}) where T = LieSeries{T}(alpha.L, f*alpha.c)
+
+import LinearAlgebra: axpy!
+
+function axpy!(a, X::LieSeries{T}, Y::LieSeries{T}) where T
+    @assert X.L == X.L
+    axpy!(a, X.c, Y.c)
+end
+
+import Base: copyto!
+function copyto!(dest::LieSeries{T}, src::LieSeries{T}) where T
+    @assert dest.L == src.L
+    copyto!(dest.c, src.c)
+end
+
+function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T}; 
+                     order::Int=alpha.L.N) where T
+    @assert alpha.L == beta.L && alpha.L == gamma.L
+    @assert gamma!=alpha && gamma!=beta
+    L = alpha.L
+    Threads.@threads for i=1:L.dim
+        @inbounds if L.nn[i] > order
+            gamma.c[i] = 0 
+        else 
+        @inbounds uu = L.S[i]
+        m = length(uu) 
+        h = zero(T)
+        for j=1:length(uu)
+            @inbounds h += uu[j][3]*(alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]])
+        end
+        @inbounds gamma.c[i] = h
+        end
+    end
+end
+
+
+function commutator(alpha::LieSeries{T}, beta::LieSeries{T}) where T
+    @assert alpha.L == beta.L
+    gamma = zero(alpha.L, T=T)
+    commutator!(gamma, alpha, beta)
+    gamma
+end
+
+function BCH(L::LieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Float64=time())
+    bernoulli_numbers = [ -1//2, 1//6, 0//1, -1//30, 0//1, 1//42, 0//1, -1//30, 0//1, 
+       5//66, 0//1, -691//2730, 0//1, 7//6, 0//1, -3617//510, 0//1, 43867//798, 0//1, 
+       -174611//330, 0//1, 854513//138, 0//1, -236364091//2730, 0//1, 8553103//6, 0//1, 
+       -23749461029//870, 0//1, 8615841276005//14322]
+    
+    H = zero(L, T=T)
+    U = zero(L, T=T)
+    V = zero(L, T=T)
+
+    # Z = X+Y
+    Z = zero(L, T=T)
+    Z.c[1] = 1
+    Z.c[2] = 1
+    for n=2:L.N        
+        if verbose
+            print("n=$(n), p=")
+        end
+        V.c[:] .= 0
+        # U = X+Y
+        U.c[:] .= 0
+        U.c[1] = 1
+        U.c[2] = 1
+        for p=1:div(n-1, 2)
+            if verbose
+                print("$(p),")
+            end
+            commutator!(H,Z,U,order=n) #H=[Z,U]
+            commutator!(U,Z,H,order=n) #U=[Z,H]
+            axpy!(bernoulli_numbers[2*p]/factorial(2*p), U, V)
+        end
+        # U = X-Y
+        U.c[:] .= 0
+        U.c[1] = 1
+        U.c[2] = -1
+        commutator!(H,U,Z,order=n)
+        axpy!(1//2, H, V)
+        for i=1:L.dim
+            if length(L.S[i])+1==n
+                Z.c[i] = V.c[i]/n
+            end
+        end
+        if verbose
+            println(" time=",time()-t0);
+        end
+    end
+    Z
+end
+
+
+function BCH1(G::Vector{Generator}, N::Int; 
+             T::Type=Rational{Int}, verbose::Bool=false)
+    @assert length(G)==2 && allunique(G)
+    t0 = time()
+    if verbose
+        print("initializing...")
+    end
+    L = LieAlgebra(2, N)
+    if verbose
+        println(" time=", time()-t0)
+    end
+    Z = BCH(L, T=T, verbose=verbose, t0=t0)
+    gen_expression(G, Z.c[1:L.dim], L.p1, L.p2)
+end             

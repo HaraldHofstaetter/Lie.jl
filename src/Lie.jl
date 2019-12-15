@@ -9,7 +9,7 @@ export rightnormed_basis, rightnormed_basis_graded
 
 export Word, ⋅, wcoeff
 
-export lie_series
+export lie_series, LieAlgebra, LieSeries
 
 export TreeAlgebra, TreeSeries, generator
 export commutator, commutator!
