@@ -251,12 +251,12 @@ function LieAlgebra(K::Int, N::Int; M::Int=0)
         w = WW[i]
         H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
         W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 for l=1:n, r=1:n]
-        C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
+        @inbounds C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
                  for j=i1:i-1 if h==hh[j]]
         for l = 1:length(factors)
-            (j1, j2) = factors[l]
-            n1 = nn[j1]
-            n2 = nn[j2]
+            @inbounds (j1, j2) = factors[l]
+            @inbounds n1 = nn[j1]
+            @inbounds n2 = nn[j2]
             c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
             if c1!=0
                 c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
