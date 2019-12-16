@@ -211,6 +211,14 @@ mutable struct LieAlgebra
     S::Vector{Vector{Tuple{Int,Int,Int}}}
 end
 
+            
+function SSS(cc::Matrix{Int}, C::Vector{Int}, k::Int, l::Int)
+    c = 0
+    @simd for j=1:k-1
+        @inbounds c += cc[j,l]*C[j]
+    end
+    c
+end
 
 
 function LieAlgebra(K::Int, N::Int; M::Int=0)
@@ -225,31 +233,28 @@ function LieAlgebra(K::Int, N::Int; M::Int=0)
     i1 = n==1 ? 1 : ii[n-1]
     i2 = ii[n]-1 
     hu = unique(hh[i1:i2])
-    #Threads.@threads for h in hu 
-    for h in hu
+
+    Threads.@threads for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
-    #println("h=$h m=$m ==============================================")
-    XXX = [(j1, j2) for n1 = 1:div(n,2)
+    factors = [(j1, j2) for n1 = 1:div(n,2)
                     for j1 = (n1==1 ? 1 : ii[n1-1]) : ii[n1]-1
                     for j2 = (n-n1==1 ? 1 : ii[n-n1-1]) : ii[n-n1]-1
                     if j1<j2 && hh[j1]+hh[j2]==h]
-    #println("XXX=",XXX)
-    cc = zeros(Int, m, length(XXX))
+    cc = zeros(Int, m, length(factors))
 
     k = 0
     for i=i1:i2
     if h==hh[i]
         k += 1
-        #println("i=$i k=$k ---------------------------------")
         n = nn[i]
         h = hh[i]
         w = WW[i]
         H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
         W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 for l=1:n, r=1:n]
-        C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) for j=i1:i-1 if h==hh[j]]
-        #println("C=", C)
-        for l = 1:length(XXX)
-            (j1, j2) = XXX[l]
+        C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
+                 for j=i1:i-1 if h==hh[j]]
+        for l = 1:length(factors)
+            (j1, j2) = factors[l]
             n1 = nn[j1]
             n2 = nn[j2]
             c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
@@ -260,11 +265,11 @@ function LieAlgebra(K::Int, N::Int; M::Int=0)
             if c2!=0
                 c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
             end
-            cc[k, l] = c1 - c2 - sum([cc[j, l]*C[j]  for j=1:k-1]) 
+
+            @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
         end
-        S[i] = [(XXX[l][1], XXX[l][2], cc[k,l]) for l=1:length(XXX) if !iszero(cc[k,l])]
-        #println("cc[k,:]=", cc[k,:])
-        #println("S[i]=", S[i])
+        @inbounds S[i] = [(factors[l][1], factors[l][2], cc[k,l]) 
+                             for l=1:length(factors) if !iszero(cc[k,l])]
     end
     end
     end
@@ -376,7 +381,7 @@ function BCH(L::LieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Floa
         commutator!(H,U,Z,order=n)
         axpy!(1//2, H, V)
         for i=1:L.dim
-            if length(L.S[i])+1==n
+            if L.nn[i]==n
                 Z.c[i] = V.c[i]/n
             end
         end
