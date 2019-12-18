@@ -114,6 +114,14 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         (d1, d2) = (d2+1, ntrees)
     end
 
+    nn = [length(S[i])+1 for i=1:ntrees]
+    for i=dim+1:ntrees
+        S[i] = [(v,w) for (v,w) in S[i] if v!=w && ((v<=K || length(S[v]))>0 && (w<=K||length(S[w])>0))]
+    end
+    for i=1:ntrees
+        S[i] = [(v,w) for (v,w) in S[i] if v!=w && ((v<=K || length(S[v]))>0 && (w<=K||length(S[w])>0))]
+    end
+
     kappa = zeros(Int, dim)
     sigma = zeros(Int, dim)
     sigma[1:K] .= 1
@@ -169,8 +177,7 @@ function commutator!(gamma::TreeSeries{T}, alpha::TreeSeries{T}, beta::TreeSerie
     L = alpha.L
     Threads.@threads for i=1:L.ntrees
         @inbounds uu = L.S[i]
-        m = length(uu) 
-        if m<order
+        if L.nn[i]<=order
             h = zero(T)
             for j=1:length(uu)
                 @inbounds h += alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]]
@@ -226,7 +233,7 @@ function BCH(L::TreeAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Flo
         commutator!(H,U,Z,order=n)
         axpy!(1//2, H, V)
         for i=1:L.ntrees
-            if length(L.S[i])+1==n
+            if L.nn[i]==n
                 Z.c[i] = V.c[i]/n
             end
         end
