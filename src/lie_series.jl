@@ -171,16 +171,29 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         i1 = n==1 ? 1 : ii[n-1]
         i2 = ii[n]-1 
         hu = unique(hh[i1:i2])
+        H = fill(Int[], n, n)
+        W2I = zeros(Int, n, n)
         Threads.@threads for h in hu 
             for i=i1:i2
-            if h==hh[i]
-                 H = Vector{Int}[l<=r ? hom_class(K, WW[i], l,r) : [0,0] for l=1:n, r=1:n]
-                 W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, WW[i], l,r) : 0 
-                                                      for l=1:n, r=1:n]
+            @inbounds if h==hh[i]
+                 @inbounds w = WW[i]
+
+                 for l=1:n
+                     for r=1:n
+                         @inbounds H[l, r] = l<=r ? hom_class(K, w, l, r) : []
+                     end
+                 end
+
+                 for l=1:n
+                     for r=1:n
+                         @inbounds W2I[l,r] = l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 
+                     end
+                 end
+                                                      
                  for j=i1:i-1
-                 if h==hh[j]
-                     if !iszero(cc[j])
-                         cc[i] -= coeff(K, WW[i], 1, n, j, p1, p2, nn, hh, H, W2I, CT, M)*cc[j]
+                 @inbounds if h==hh[j]
+                     @inbounds if !iszero(cc[j])
+                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M)*cc[j]
                      end
                  end
                  end
@@ -208,11 +221,11 @@ mutable struct LieAlgebra
     p1::Vector{Int}
     p2::Vector{Int}
     nn::Vector{Int}
-    S::Vector{Vector{Tuple{Int,Int,Int}}}
+    S::Vector{Vector{Vector{Int}}} 
 end
 
             
-function SSS(cc::Matrix{Int}, C::Vector{Int}, k::Int, l::Int)
+@inline function SSS(cc::Matrix{Int}, C::Vector{Int}, k::Int, l::Int)::Int
     c = 0
     @simd for j=1:k-1
         @inbounds c += cc[j,l]*C[j]
@@ -221,26 +234,33 @@ function SSS(cc::Matrix{Int}, C::Vector{Int}, k::Int, l::Int)
 end
 
 
-function LieAlgebra(K::Int, N::Int; M::Int=0)
+function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=time())
     @assert K>=2
 
     p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
 
     dim = length(WW)
-    S = fill(Tuple{Int,Int,Int}[], dim)
+    S = fill(Array{Int,1}[], dim)
 
     for n=1:N
+        if verbose
+            print("n=$n ... ")
+        end
     i1 = n==1 ? 1 : ii[n-1]
     i2 = ii[n]-1 
     hu = unique(hh[i1:i2])
 
     Threads.@threads for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
-    factors = [(j1, j2) for n1 = 1:div(n,2)
+    factors = [[j1, j2] for n1 = 1:div(n,2)
                     for j1 = (n1==1 ? 1 : ii[n1-1]) : ii[n1]-1
                     for j2 = (n-n1==1 ? 1 : ii[n-n1-1]) : ii[n-n1]-1
                     if j1<j2 && hh[j1]+hh[j2]==h]
+
     cc = zeros(Int, m, length(factors))
+    H = fill(Int[], n, n)
+    W2I = zeros(Int, n, n)
+    C = zeros(Int, m) 
 
     k = 0
     for i=i1:i2
@@ -249,29 +269,59 @@ function LieAlgebra(K::Int, N::Int; M::Int=0)
         n = nn[i]
         h = hh[i]
         w = WW[i]
-        H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
-        W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 for l=1:n, r=1:n]
-        @inbounds C = [coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
-                 for j=i1:i-1 if h==hh[j]]
+
+        for l=1:n
+            for r=1:n
+                @inbounds H[l, r] = l<=r ? hom_class(K, w, l, r) : []
+            end
+        end
+
+        for l=1:n
+            for r=1:n
+                @inbounds W2I[l,r] = l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 
+            end
+        end
+
+        jj = 0
+        for j=i1:i-1 
+            @inbounds if h==hh[j]
+                jj += 1
+                @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
+            end
+        end
+
         for l = 1:length(factors)
-            @inbounds (j1, j2) = factors[l]
+            @inbounds j1 = factors[l][1]
+            @inbounds j2 = factors[l][2]
             @inbounds n1 = nn[j1]
             @inbounds n2 = nn[j2]
             c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
             if c1!=0
                 c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
             end
-            c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
+            #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
+            #if c2!=0
+            #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
+            #end
+
+            #c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
+            #if c1!=0
+            #    c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
+            #end
+            c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
             if c2!=0
-                c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
+                c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
             end
 
             @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
         end
-        @inbounds S[i] = [(factors[l][1], factors[l][2], cc[k,l]) 
+        @inbounds S[i] = [[factors[l][1], factors[l][2], cc[k,l]] 
                              for l=1:length(factors) if !iszero(cc[k,l])]
     end
     end
+    end
+    if verbose
+        println("time=", time()-t0)
     end
     end
 
@@ -322,7 +372,7 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
     L = alpha.L
     Threads.@threads for i=1:L.dim
         @inbounds if L.nn[i] > order
-            gamma.c[i] = 0 
+            @inbounds gamma.c[i] = 0 
         else 
         @inbounds uu = L.S[i]
         m = length(uu) 
