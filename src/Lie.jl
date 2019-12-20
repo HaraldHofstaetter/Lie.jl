@@ -15,11 +15,14 @@ export TreeAlgebra, TreeSeries, generator
 export commutator, commutator!
 export BCH
 
+export tree2lie
+
 
 include("expressions.jl")
 include("lyndon.jl")
 include("wcoeff.jl")
 include("lie_series.jl")
 include("tree_algebra.jl")
+include("tree2lie.jl")
 
 end # module

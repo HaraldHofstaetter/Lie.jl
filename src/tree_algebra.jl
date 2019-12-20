@@ -26,7 +26,7 @@ mutable struct TreeAlgebra
     nn::Vector{Int}
     sigma::Vector{Int}
     S::Vector{Vector{Tuple{Int,Int}}}
-    #T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
+    T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
 end
 
 function gen_hall_data(K::Int, N::Int)
@@ -130,7 +130,7 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         sigma[i] = kappa[i]*sigma[p1[i]]*sigma[p2[i]]
     end
 
-    TreeAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S) #, T)
+    TreeAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S, T)
 end
 
 

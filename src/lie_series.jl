@@ -77,8 +77,9 @@ function init_lie(K::Int, N::Int, M::Int)
     hh = [hom_class(K, [c], 1, 1) for c=0:K-1]
     wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
     index = K+1
-    ii = zeros(Int, N)
-    ii[1] = index 
+    ii = zeros(Int, N+1)
+    ii[1] = 1 
+    ii[2] = index 
     for n=2:N
         W,f = lyndon_words_factored(K, n)
         for j=1:length(W)
@@ -93,15 +94,15 @@ function init_lie(K::Int, N::Int, M::Int)
             index += 1
         end
         append!(WW, W)
-        ii[n] = index
+        ii[n+1] = index
     end
 
     # generate coefficients lookup table
 
     #CT = Dict{Tuple{Int, Int}, Int}()
     #for n=1:M
-    #    i1 = n==1 ? 1 : ii[n-1]
-    #    i2 = ii[n]-1 
+    #    i1 = ii[n]
+    #    i2 = ii[n+1]-1 
     #    for k=0:K^n-1
     #        w = [parse(Int, c) for c in string(k, base=K, pad=n)]
     #        H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
@@ -117,10 +118,10 @@ function init_lie(K::Int, N::Int, M::Int)
     #    end
     #end
 
-    CT = zeros(Int, M==0 ? 0 : ii[M]-1, div(K^(M+1)-1, K-1)-1)
+    CT = zeros(Int, ii[M+1]-1, div(K^(M+1)-1, K-1)-1) 
     for n=1:M
-        i1 = n==1 ? 1 : ii[n-1]
-        i2 = ii[n]-1 
+        i1 = ii[n]
+        i2 = ii[n+1]-1 
         for k=0:K^n-1
             w = [parse(Int, c) for c in string(k, base=K, pad=n)]
             H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
@@ -168,12 +169,12 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     end
 
     for n=1:N
-        i1 = n==1 ? 1 : ii[n-1]
-        i2 = ii[n]-1 
+        i1 = ii[n]
+        i2 = ii[n+1]-1 
         hu = unique(hh[i1:i2])
-        H = fill(Int[], n, n)
-        W2I = zeros(Int, n, n)
         Threads.@threads for h in hu 
+            H = fill(Int[], n, n)
+            W2I = zeros(Int, n, n)
             for i=i1:i2
             @inbounds if h==hh[i]
                  @inbounds w = WW[i]
@@ -239,6 +240,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
 
     p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
 
+    println(ii)
+
     dim = length(WW)
     S = fill(Array{Int,1}[], dim)
 
@@ -246,15 +249,15 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         if verbose
             print("n=$n ... ")
         end
-    i1 = n==1 ? 1 : ii[n-1]
-    i2 = ii[n]-1 
+    i1 = ii[n]
+    i2 = ii[n+1]-1 
     hu = unique(hh[i1:i2])
 
     Threads.@threads for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
     factors = [[j1, j2] for n1 = 1:div(n,2)
-                    for j1 = (n1==1 ? 1 : ii[n1-1]) : ii[n1]-1
-                    for j2 = (n-n1==1 ? 1 : ii[n-n1-1]) : ii[n-n1]-1
+                    for j1 = ii[n1] : ii[n1+1]-1
+                    for j2 = ii[n-n1] : ii[n-n1+1]-1
                     if j1<j2 && hh[j1]+hh[j2]==h]
 
     cc = zeros(Int, m, length(factors))
@@ -444,15 +447,15 @@ end
 
 
 function BCH1(G::Vector{Generator}, N::Int; 
-             T::Type=Rational{Int}, verbose::Bool=false)
+             T::Type=Rational{Int}, verbose::Bool=false, M::Int=0)
     @assert length(G)==2 && allunique(G)
     t0 = time()
     if verbose
-        print("initializing...")
+        println("initializing Lie algebra ...")
     end
-    L = LieAlgebra(2, N)
+    L = LieAlgebra(2, N, M=M, verbose=verbose, t0=t0)
     if verbose
-        println(" time=", time()-t0)
+        println("evaluating recursion formula ...")
     end
     Z = BCH(L, T=T, verbose=verbose, t0=t0)
     gen_expression(G, Z.c[1:L.dim], L.p1, L.p2)
