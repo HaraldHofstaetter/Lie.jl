@@ -25,7 +25,8 @@ mutable struct TreeAlgebra
     p2::Vector{Int}
     nn::Vector{Int}
     sigma::Vector{Int}
-    S::Vector{Vector{Tuple{Int,Int}}}
+    #S::Vector{Vector{Tuple{Int,Int}}}
+    S::Vector{Vector{Vector{Int}}}
     T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
 end
 
@@ -93,9 +94,9 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
     d1 = K+1 
     d2 = dim
     ntrees = dim
-    S = fill(Tuple{Int,Int}[], K)
+    S = fill(Vector{Int}[], K)
     while true 
-        append!(S, fill(Tuple{Int,Int}[], d2-d1+1))
+        append!(S, fill(Vector{Int}[], d2-d1+1))
         for i = d1:d2
             v = new_tree!(T, (T.T[i])[1:end-1])
             w = (T.T[i])[end]
@@ -103,9 +104,9 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
             ww = S[w]
             p = length(vv)
             q = length(ww)
-            S[i] = vcat((v,w), # pairs swapped w.r.t eq. (2.14)
-                        [(circ!(T, vv[j][1], w), vv[j][2]) for j=1:p], 
-                        [(circ!(T, v, ww[j][1]), ww[j][2]) for j=1:q])
+            S[i] = vcat([[v,w]], # pairs swapped w.r.t eq. (2.14)
+                        [[circ!(T, vv[j][1], w), vv[j][2]] for j=1:p], 
+                        [[circ!(T, v, ww[j][1]), ww[j][2]] for j=1:q])
         end
         ntrees = length(T.T)
         if ntrees==d2
@@ -116,10 +117,10 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
 
     nn = [length(S[i])+1 for i=1:ntrees]
     for i=dim+1:ntrees
-        S[i] = [(v,w) for (v,w) in S[i] if v!=w && ((v<=K || length(S[v]))>0 && (w<=K||length(S[w])>0))]
+        S[i] = [[u[1],u[2]] for u in S[i] if u[1]!=u[2] && ((u[1]<=K || length(S[u[1]]))>0 && (u[2]<=K||length(S[u[2]])>0))]
     end
     for i=1:ntrees
-        S[i] = [(v,w) for (v,w) in S[i] if v!=w && ((v<=K || length(S[v]))>0 && (w<=K||length(S[w])>0))]
+        S[i] = [[u[1],u[2]] for u in S[i] if u[1]!=u[2] && ((u[1]<=K || length(S[u[1]]))>0 && (u[2]<=K||length(S[u[2]])>0))]
     end
 
     kappa = zeros(Int, dim)

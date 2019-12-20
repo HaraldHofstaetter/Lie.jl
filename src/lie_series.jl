@@ -240,8 +240,6 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
 
     p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
 
-    println(ii)
-
     dim = length(WW)
     S = fill(Array{Int,1}[], dim)
 
