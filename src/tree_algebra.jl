@@ -25,9 +25,9 @@ mutable struct TreeAlgebra
     p2::Vector{Int}
     nn::Vector{Int}
     sigma::Vector{Int}
-    #S::Vector{Vector{Tuple{Int,Int}}}
     S::Vector{Vector{Vector{Int}}}
-    T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
+    hh::Vector{Vector{Int}}
+    #T::ColoredRootedTree # only needed for generating S, not for calculations with TreeSeries
 end
 
 function gen_hall_data(K::Int, N::Int)
@@ -115,6 +115,12 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         (d1, d2) = (d2+1, ntrees)
     end
 
+    #homogenity classes (neededfor tree2lie)
+    hh = [ [j==k ? 1 : 0 for j=1:K] for k=1:K ]
+    for j=K+1:ntrees
+        @inbounds push!(hh, hh[T.T[j][1]+1]+sum([hh[T.T[j][i]] for i=2:length(T.T[j])]))
+    end
+
     nn = [length(S[i])+1 for i=1:ntrees]
     for i=dim+1:ntrees
         S[i] = [[u[1],u[2]] for u in S[i] if u[1]!=u[2] && ((u[1]<=K || length(S[u[1]]))>0 && (u[2]<=K||length(S[u[2]])>0))]
@@ -131,7 +137,7 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         sigma[i] = kappa[i]*sigma[p1[i]]*sigma[p2[i]]
     end
 
-    TreeAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S, T)
+    TreeAlgebra(K, N, dim, ntrees, p1, p2, nn, sigma, S, hh) #, T)
 end
 
 

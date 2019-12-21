@@ -7,7 +7,7 @@ function hom_class(K::Int, w::Vector{Int}, l::Int, r::Int)
 end
 
 
-function word_to_index(K::Int, w::Vector{Int}, l::Int, r::Int)
+@inline function word_to_index(K::Int, w::Vector{Int}, l::Int, r::Int)
     x = w[r]
     y = K
     for j=r-1:-1:l
@@ -22,47 +22,47 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
                p1::Vector{Int}, p2::Vector{Int}, 
                nn::Vector{Int}, h::Vector{Vector{Int}},
                H::Matrix{Vector{Int}},
+               WI::Vector{Int},
                W2I::Matrix{Int},
-               #CT::Dict{Tuple{Int, Int}, Int},
                CT::Matrix{Int},
                M::Int)
     if l==r 
         return @inbounds w[l]==j-1 ? 1 : 0
     end
 
-    if @inbounds H[l,r]!=h[j]
-        return 0
-    end
-
     if r-l+1<=M # use lookup table
-        #return get(CT, (j, W2I[l,r]), 0)  
         return @inbounds CT[j, W2I[l,r]]
     end
+
+    if @inbounds H[l,r]!=h[j] || W2I[l,r]<WI[j] 
+       return 0
+    end
+
 
 @inbounds j1 =p1[j]
 @inbounds j2 =p2[j]
 @inbounds m1 = nn[j1]
 @inbounds m2 = nn[j2]
 
-    if m1<m2
-        c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, CT, M)
+    @inbounds if WI[j1]<WI[j2]
+        c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c1!=0
-            c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, CT, M)
+            c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
     
-        c2 = coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, CT, M)
+        c2 = coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c2!=0
-            c2 *= coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, CT, M)
+            c2 *= coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
     else
-        c1 = coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, W2I, CT, M)
+        c1 = coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c1!=0
-            c1 *= coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, W2I, CT, M)
+            c1 *= coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
     
-        c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, W2I, CT, M)
+        c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c2!=0
-            c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, W2I, CT, M)
+            c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
     end
 
@@ -97,27 +97,9 @@ function init_lie(K::Int, N::Int, M::Int)
         ii[n+1] = index
     end
 
+    WI = [Lie.word_to_index(2, w, 1, length(w)) for w in WW]
+
     # generate coefficients lookup table
-
-    #CT = Dict{Tuple{Int, Int}, Int}()
-    #for n=1:M
-    #    i1 = ii[n]
-    #    i2 = ii[n+1]-1 
-    #    for k=0:K^n-1
-    #        w = [parse(Int, c) for c in string(k, base=K, pad=n)]
-    #        H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
-    #        M2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0
-    #                                             for l=1:n, r=1:n]
-    #        wi = word_to_index(K, w, 1, n)
-    #        for j=i1:i2
-    #            c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, CT, n-1)
-    #            if c!=0
-    #                CT[(j, wi)] = c
-    #            end
-    #        end
-    #    end
-    #end
-
     CT = zeros(Int, ii[M+1]-1, div(K^(M+1)-1, K-1)-1) 
     for n=1:M
         i1 = ii[n]
@@ -125,18 +107,18 @@ function init_lie(K::Int, N::Int, M::Int)
         for k=0:K^n-1
             w = [parse(Int, c) for c in string(k, base=K, pad=n)]
             H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
-            M2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0
+            W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0
                                                  for l=1:n, r=1:n]
             wi = word_to_index(K, w, 1, n)
             for j=i1:i2
-                c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, M2I, CT, n-1)
+                c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, n-1)
                 if c!=0
                     CT[j, wi] = c
                 end
             end
         end
     end
-    p1, p2, nn, WW, ii, hh, CT
+    p1, p2, nn, WW, ii, hh, CT, WI
 end
 
 
@@ -151,7 +133,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     K = length(G)
     @assert K>=2 && allunique(G)
 
-    p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
+    p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
 
     if verbose
         println("time=", time()-t0)
@@ -186,15 +168,15 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                  end
 
                  for l=1:n
-                     for r=1:n
-                         @inbounds W2I[l,r] = l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 
+                     for r=l:n
+                         @inbounds W2I[l,r] = word_to_index(K, w, l,r) 
                      end
                  end
                                                       
                  for j=i1:i-1
                  @inbounds if h==hh[j]
                      @inbounds if !iszero(cc[j])
-                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M)*cc[j]
+                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*cc[j]
                      end
                  end
                  end
@@ -238,7 +220,7 @@ end
 function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=time())
     @assert K>=2
 
-    p1, p2, nn, WW, ii, hh, CT = init_lie(K, N, M)
+    p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
 
     dim = length(WW)
     S = fill(Array{Int,1}[], dim)
@@ -253,12 +235,15 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
 
     Threads.@threads for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
-    factors = [[j1, j2] for n1 = 1:div(n,2)
+    @inbounds f1 = [j1 for n1 = 1:div(n,2)
                     for j1 = ii[n1] : ii[n1+1]-1
-                    for j2 = ii[n-n1] : ii[n-n1+1]-1
-                    if j1<j2 && hh[j1]+hh[j2]==h]
-
-    cc = zeros(Int, m, length(factors))
+                    for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
+                    if hh[j1]+hh[j2]==h]
+    @inbounds f2 = [j2 for n1 = 1:div(n,2)
+                    for j1 = ii[n1] : ii[n1+1]-1
+                    for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
+                    if hh[j1]+hh[j2]==h]
+    cc = zeros(Int, m, length(f1))
     H = fill(Int[], n, n)
     W2I = zeros(Int, n, n)
     C = zeros(Int, m) 
@@ -278,8 +263,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         end
 
         for l=1:n
-            for r=1:n
-                @inbounds W2I[l,r] = l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0 
+            for r=l:n
+                @inbounds W2I[l,r] = word_to_index(K, w, l,r) 
             end
         end
 
@@ -287,37 +272,37 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         for j=i1:i-1 
             @inbounds if h==hh[j]
                 jj += 1
-                @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, W2I, CT, M) 
+                @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
             end
         end
 
-        for l = 1:length(factors)
-            @inbounds j1 = factors[l][1]
-            @inbounds j2 = factors[l][2]
+        for l = 1:length(f1)
+            @inbounds j1 = f1[l]
+            @inbounds j2 = f2[l]
             @inbounds n1 = nn[j1]
             @inbounds n2 = nn[j2]
-            c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
-            if c1!=0
-                c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
-            end
-            #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
+            #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+            #if c1!=0
+            #    c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+            #end
+            #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
             #if c2!=0
-            #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
+            #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
             #end
 
-            #c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, W2I, CT, M)
-            #if c1!=0
-            #    c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, W2I, CT, M)
-            #end
-            c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, W2I, CT, M)
+            c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+            if c1!=0
+                c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+            end
+            c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
             if c2!=0
-                c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, W2I, CT, M)
+                c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
             end
 
             @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
         end
-        @inbounds S[i] = [[factors[l][1], factors[l][2], cc[k,l]] 
-                             for l=1:length(factors) if !iszero(cc[k,l])]
+        @inbounds S[i] = [[f1[l], f2[l], cc[k,l]] 
+                             for l=1:length(f1) if !iszero(cc[k,l])]
     end
     end
     end
