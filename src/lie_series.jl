@@ -233,7 +233,7 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
     i2 = ii[n+1]-1 
     hu = unique(hh[i1:i2])
 
-    Threads.@threads for h in hu 
+    for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
     @inbounds f1 = [j1 for n1 = 1:div(n,2)
                     for j1 = ii[n1] : ii[n1+1]-1
@@ -243,10 +243,10 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                     for j1 = ii[n1] : ii[n1+1]-1
                     for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
                     if hh[j1]+hh[j2]==h]
-    cc = zeros(Int, m, length(f1))
+    cc = zeros(Int, m, length(f1)) 
     H = fill(Int[], n, n)
     W2I = zeros(Int, n, n)
-    C = zeros(Int, m) 
+    C = zeros(Int, m)
 
     k = 0
     for i=i1:i2
@@ -257,8 +257,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         w = WW[i]
 
         for l=1:n
-            for r=1:n
-                @inbounds H[l, r] = l<=r ? hom_class(K, w, l, r) : []
+            for r=l:n
+                @inbounds H[l, r] = hom_class(K, w, l, r) 
             end
         end
 
@@ -268,15 +268,13 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
             end
         end
 
-        jj = 0
-        for j=i1:i-1 
-            @inbounds if h==hh[j]
-                jj += 1
-                @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
-            end
+        @inbounds J = [j for j=i1:i-1 if h==hh[j]]
+        Threads.@threads for jj=1:length(J)
+            @inbounds j = J[jj]
+            @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
         end
 
-        for l = 1:length(f1)
+        Threads.@threads for l = 1:length(f1)
             @inbounds j1 = f1[l]
             @inbounds j2 = f2[l]
             @inbounds n1 = nn[j1]
