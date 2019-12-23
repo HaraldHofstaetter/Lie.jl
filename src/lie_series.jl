@@ -149,7 +149,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     L = vcat([L[j:p:end] for j=1:p]...)
     Threads.@threads for l=1:length(L)
         i = L[l]
-    #Threads.@threads for i=1:length(WW)
+
         c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
     end
 
@@ -162,11 +162,11 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         i1 = ii[n]
         i2 = ii[n+1]-1 
         hu = unique(hh[i1:i2])
+
         L = 1:length(hu)
         L = vcat([L[j:p:end] for j=1:p]...)
         Threads.@threads for l=1:length(hu)
             h = hu[L[l]]
-        #Threads.@threads for h in hu 
 
             H = fill(Int[], n, n)
             W2I = zeros(Int, n, n)
@@ -248,7 +248,13 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
     i2 = ii[n+1]-1 
     hu = unique(hh[i1:i2])
 
-    for h in hu 
+    p = Threads.nthreads()
+    LI = 1:length(hu)
+    LI = vcat([LI[j:p:end] for j=1:p]...)
+    Threads.@threads for li=1:length(LI)
+    h = hu[LI[li]]
+
+    #for h in hu 
     m = sum([1 for i=i1:i2 if h==hh[i]])
     @inbounds f1 = [j1 for n1 = 1:div(n,2)
                     for j1 = ii[n1] : ii[n1+1]-1
@@ -284,12 +290,14 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         end
 
         @inbounds J = [j for j=i1:i-1 if h==hh[j]]
-        Threads.@threads for jj=1:length(J)
+        #Threads.@threads for jj=1:length(J)
+        for jj=1:length(J)
             @inbounds j = J[jj]
             @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
         end
 
-        Threads.@threads for l = 1:length(f1)
+        #Threads.@threads for l = 1:length(f1)
+        for l = 1:length(f1)
             @inbounds j1 = f1[l]
             @inbounds j2 = f2[l]
             @inbounds n1 = nn[j1]
