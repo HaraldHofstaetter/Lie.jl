@@ -115,7 +115,7 @@ function TreeAlgebra(K::Int, N::Int; lyndon_basis::Bool=false)
         (d1, d2) = (d2+1, ntrees)
     end
 
-    #homogenity classes (neededfor tree2lie)
+    #homogenity classes (needed for tree2lie)
     hh = [ [j==k ? 1 : 0 for j=1:K] for k=1:K ]
     for j=K+1:ntrees
         @inbounds push!(hh, hh[T.T[j][1]+1]+sum([hh[T.T[j][i]] for i=2:length(T.T[j])]))

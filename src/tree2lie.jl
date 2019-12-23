@@ -1,7 +1,7 @@
-function tree2lie(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
-    counter = 0
-    CCC =Int[]
-    TTT =Float64[]
+function LieAlgebra(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
+    #counter = 0
+    #CCC =Int[]
+    #TTT =Float64[]
 
     ii=vcat([findfirst(x->x==n, T.nn) for n=1:T.N], T.dim+1)
 
@@ -45,7 +45,7 @@ function tree2lie(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
 
     S = [Array{Int,1}[] for i=1:T.dim]
 
-    t1 = time()
+    #t1 = time()
     for n=1:T.N
         if verbose
             print("n=$n ... ")
@@ -53,7 +53,7 @@ function tree2lie(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
         @inbounds i1 = ii[n]
         @inbounds i2 = ii[n+1]-1 
         @inbounds hu = unique(T.hh[i1:i2])
-        for h in hu
+        Threads.@threads for h in hu
             #@inbounds factors = [[j1, j2] for n1 = 1:div(n,2)
             #                              for j1 = ii[n1] : ii[n1+1]-1 
             #                              for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1 
@@ -95,7 +95,7 @@ function tree2lie(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
                         if c!=0
                             @inbounds push!(S[i], [j1, j2, div(c, T.sigma[i])])
                         end
-                        counter += 1
+                        #counter += 1
                     end
                 end
             end
@@ -103,11 +103,11 @@ function tree2lie(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
         if verbose
             println(time()-t0)
         end
-        push!(CCC, counter)
-        push!(TTT, time()-t1)
+        #push!(CCC, counter)
+        #push!(TTT, time()-t1)
     end
 
-    LieAlgebra(T.K, T.N, T.dim, T.p1, T.p2, T.nn[1:T.dim], S), CCC, TTT
+    LieAlgebra(T.K, T.N, T.dim, T.p1, T.p2, T.nn[1:T.dim], S) #, CCC, TTT
 end
 
 

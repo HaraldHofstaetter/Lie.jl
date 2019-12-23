@@ -1,4 +1,4 @@
-function hom_class(K::Int, w::Vector{Int}, l::Int, r::Int)
+function multi_degree(K::Int, w::Vector{Int}, l::Int, r::Int)
     h = zeros(Int, K)
     for i=l:r 
         h[w[i]+1] += 1
@@ -7,7 +7,7 @@ function hom_class(K::Int, w::Vector{Int}, l::Int, r::Int)
 end
 
 
-@inline function word_to_index(K::Int, w::Vector{Int}, l::Int, r::Int)
+@inline function word2index(K::Int, w::Vector{Int}, l::Int, r::Int)
     x = w[r]
     y = K
     for j=r-1:-1:l
@@ -74,8 +74,8 @@ function init_lie(K::Int, N::Int, M::Int)
     p1 = collect(1:K)
     p2 = zeros(Int, K)
     nn = ones(Int, K)
-    hh = [hom_class(K, [c], 1, 1) for c=0:K-1]
-    wordindex = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
+    hh = [multi_degree(K, [c], 1, 1) for c=0:K-1]
+    lynw_index = Dict{Vector{Int},Int}([[i-1]=>i for i=1:K]...)
     index = K+1
     ii = zeros(Int, N+1)
     ii[1] = 1 
@@ -86,18 +86,18 @@ function init_lie(K::Int, N::Int, M::Int)
             w = W[j]
             s1 = w[1:f[j]-1]
             s2 = w[f[j]:end]
-            wordindex[w]=index
-            push!(p1, wordindex[s1])
-            push!(p2, wordindex[s2])
+            lynw_index[w]=index
+            push!(p1, lynw_index[s1])
+            push!(p2, lynw_index[s2])
             push!(nn, n)
-            push!(hh, hom_class(K, w, 1, n))
+            push!(hh, multi_degree(K, w, 1, n))
             index += 1
         end
         append!(WW, W)
         ii[n+1] = index
     end
 
-    WI = [Lie.word_to_index(2, w, 1, length(w)) for w in WW]
+    WI = [Lie.word2index(2, w, 1, length(w)) for w in WW]
 
     # generate coefficients lookup table
     CT = zeros(Int, ii[M+1]-1, div(K^(M+1)-1, K-1)-1) 
@@ -106,10 +106,10 @@ function init_lie(K::Int, N::Int, M::Int)
         i2 = ii[n+1]-1 
         for k=0:K^n-1
             w = [parse(Int, c) for c in string(k, base=K, pad=n)]
-            H = Vector{Int}[l<=r ? hom_class(K, w, l,r) : [0,0] for l=1:n, r=1:n]
-            W2I = Int[l<=r && r-l+1<=M ? word_to_index(K, w, l,r) : 0
+            H = Vector{Int}[l<=r ? multi_degree(K, w, l,r) : [0,0] for l=1:n, r=1:n]
+            W2I = Int[l<=r && r-l+1<=M ? word2index(K, w, l,r) : 0
                                                  for l=1:n, r=1:n]
-            wi = word_to_index(K, w, 1, n)
+            wi = word2index(K, w, 1, n)
             for j=i1:i2
                 c = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, n-1)
                 if c!=0
@@ -132,6 +132,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     end
     K = length(G)
     @assert K>=2 && allunique(G)
+    M = min(M, N)
 
     p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
 
@@ -140,9 +141,16 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         print("coeffs of words...")
     end
 
-    cc = zeros(T, length(WW))
-    Threads.@threads for i=1:length(WW)
-        cc[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
+    p = Threads.nthreads()
+
+    c = zeros(T, length(WW))
+
+    L = 1:length(WW)
+    L = vcat([L[j:p:end] for j=1:p]...)
+    Threads.@threads for l=1:length(L)
+        i = L[l]
+    #Threads.@threads for i=1:length(WW)
+        c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
     end
 
     if verbose
@@ -154,29 +162,35 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         i1 = ii[n]
         i2 = ii[n+1]-1 
         hu = unique(hh[i1:i2])
-        Threads.@threads for h in hu 
+        L = 1:length(hu)
+        L = vcat([L[j:p:end] for j=1:p]...)
+        Threads.@threads for l=1:length(hu)
+            h = hu[L[l]]
+        #Threads.@threads for h in hu 
+
             H = fill(Int[], n, n)
             W2I = zeros(Int, n, n)
+
             for i=i1:i2
             @inbounds if h==hh[i]
                  @inbounds w = WW[i]
 
                  for l=1:n
                      for r=1:n
-                         @inbounds H[l, r] = l<=r ? hom_class(K, w, l, r) : []
+                         @inbounds H[l, r] = l<=r ? multi_degree(K, w, l, r) : []
                      end
                  end
 
                  for l=1:n
                      for r=l:n
-                         @inbounds W2I[l,r] = word_to_index(K, w, l,r) 
+                         @inbounds W2I[l,r] = word2index(K, w, l,r) 
                      end
                  end
                                                       
                  for j=i1:i-1
                  @inbounds if h==hh[j]
-                     @inbounds if !iszero(cc[j])
-                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*cc[j]
+                     @inbounds if !iszero(c[j])
+                         @inbounds c[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*c[j]
                      end
                  end
                  end
@@ -190,9 +204,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     end
     
     if lists_output
-        return p1, p2, nn, cc
+        return p1, p2, nn, c
     else
-        return gen_expression(G, cc, p1, p2)
+        return gen_expression(G, c, p1, p2)
     end
 end
 
@@ -220,6 +234,7 @@ end
 function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=time())
     @assert K>=2
 
+    M = min(M, N)
     p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
 
     dim = length(WW)
@@ -258,13 +273,13 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
 
         for l=1:n
             for r=l:n
-                @inbounds H[l, r] = hom_class(K, w, l, r) 
+                @inbounds H[l, r] = multi_degree(K, w, l, r) 
             end
         end
 
         for l=1:n
             for r=l:n
-                @inbounds W2I[l,r] = word_to_index(K, w, l,r) 
+                @inbounds W2I[l,r] = word2index(K, w, l,r) 
             end
         end
 
