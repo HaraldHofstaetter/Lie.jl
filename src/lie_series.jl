@@ -145,10 +145,10 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
     c = zeros(T, length(WW))
 
-    L = 1:length(WW)
-    L = vcat([L[j:p:end] for j=1:p]...)
-    Threads.@threads for l=1:length(L)
-        i = L[l]
+    LI = 1:length(WW)
+    LI = vcat([LI[j:p:end] for j=1:p]...)
+    Threads.@threads for li=1:length(LI)
+        i = LI[li]
 
         c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
     end
@@ -163,10 +163,10 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         i2 = ii[n+1]-1 
         hu = unique(hh[i1:i2])
 
-        L = 1:length(hu)
-        L = vcat([L[j:p:end] for j=1:p]...)
-        Threads.@threads for l=1:length(hu)
-            h = hu[L[l]]
+        LI = 1:length(hu)
+        LI = vcat([LI[j:p:end] for j=1:p]...)
+        Threads.@threads for li=1:length(LI)
+            h = hu[LI[li]]
 
             H = fill(Int[], n, n)
             W2I = zeros(Int, n, n)
@@ -244,92 +244,93 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         if verbose
             print("n=$n ... ")
         end
-    i1 = ii[n]
-    i2 = ii[n+1]-1 
-    hu = unique(hh[i1:i2])
+        i1 = ii[n]
+        i2 = ii[n+1]-1 
+        hu = unique(hh[i1:i2])
 
-    p = Threads.nthreads()
-    LI = 1:length(hu)
-    LI = vcat([LI[j:p:end] for j=1:p]...)
-    Threads.@threads for li=1:length(LI)
-    h = hu[LI[li]]
+        p = Threads.nthreads()
 
-    #for h in hu 
-    m = sum([1 for i=i1:i2 if h==hh[i]])
-    @inbounds f1 = [j1 for n1 = 1:div(n,2)
-                    for j1 = ii[n1] : ii[n1+1]-1
-                    for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
-                    if hh[j1]+hh[j2]==h]
-    @inbounds f2 = [j2 for n1 = 1:div(n,2)
-                    for j1 = ii[n1] : ii[n1+1]-1
-                    for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
-                    if hh[j1]+hh[j2]==h]
-    cc = zeros(Int, m, length(f1)) 
-    H = fill(Int[], n, n)
-    W2I = zeros(Int, n, n)
-    C = zeros(Int, m)
+        #LI = 1:length(hu)
+        #LI = vcat([LI[j:p:end] for j=1:p]...)
+        #Threads.@threads for li=1:length(LI)
+        #    h = hu[LI[li]]
 
-    k = 0
-    for i=i1:i2
-    if h==hh[i]
-        k += 1
-        n = nn[i]
-        h = hh[i]
-        w = WW[i]
+        for h in hu 
+            m = sum([1 for i=i1:i2 if h==hh[i]])
+            @inbounds f1 = [j1 for n1 = 1:div(n,2)
+                            for j1 = ii[n1] : ii[n1+1]-1
+                            for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
+                            if hh[j1]+hh[j2]==h]
+            @inbounds f2 = [j2 for n1 = 1:div(n,2)
+                            for j1 = ii[n1] : ii[n1+1]-1
+                            for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
+                            if hh[j1]+hh[j2]==h]
+            cc = zeros(Int, m, length(f1)) 
+            H = fill(Int[], n, n)
+            W2I = zeros(Int, n, n)
+            C = zeros(Int, m)
+        
+            k = 0
+            for i=i1:i2
+            if h==hh[i]
+                k += 1
+                n = nn[i]
+                h = hh[i]
+                w = WW[i]
+        
+                for l=1:n
+                    for r=l:n
+                        @inbounds H[l, r] = multi_degree(K, w, l, r) 
+                    end
+                end
+        
+                for l=1:n
+                    for r=l:n
+                        @inbounds W2I[l,r] = word2index(K, w, l,r) 
+                    end
+                end
 
-        for l=1:n
-            for r=l:n
-                @inbounds H[l, r] = multi_degree(K, w, l, r) 
+                @inbounds J = [j for j=i1:i-1 if h==hh[j]]
+                J = vcat([J[j:p:end] for j=1:p]...)
+                Threads.@threads for jj=1:length(J)
+                    @inbounds j = J[jj]
+                        @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
+                end
+        
+                #Threads.@threads for l = 1:length(f1)
+                for l = 1:length(f1)
+                    @inbounds j1 = f1[l]
+                    @inbounds j2 = f2[l]
+                    @inbounds n1 = nn[j1]
+                    @inbounds n2 = nn[j2]
+                    #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    #if c1!=0
+                    #    c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    #end
+                    #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    #if c2!=0
+                    #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    #end
+        
+                    c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    if c1!=0
+                        c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    end
+                    c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    if c2!=0
+                        c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                    end
+        
+                    @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
+                end
+                @inbounds S[i] = [[f1[l], f2[l], cc[k,l]] 
+                                     for l=1:length(f1) if !iszero(cc[k,l])]
+            end
             end
         end
-
-        for l=1:n
-            for r=l:n
-                @inbounds W2I[l,r] = word2index(K, w, l,r) 
-            end
+        if verbose
+            println("time=", time()-t0)
         end
-
-        @inbounds J = [j for j=i1:i-1 if h==hh[j]]
-        #Threads.@threads for jj=1:length(J)
-        for jj=1:length(J)
-            @inbounds j = J[jj]
-            @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
-        end
-
-        #Threads.@threads for l = 1:length(f1)
-        for l = 1:length(f1)
-            @inbounds j1 = f1[l]
-            @inbounds j2 = f2[l]
-            @inbounds n1 = nn[j1]
-            @inbounds n2 = nn[j2]
-            #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            #if c1!=0
-            #    c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            #end
-            #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            #if c2!=0
-            #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            #end
-
-            c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            if c1!=0
-                c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            end
-            c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            if c2!=0
-                c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-            end
-
-            @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
-        end
-        @inbounds S[i] = [[f1[l], f2[l], cc[k,l]] 
-                             for l=1:length(f1) if !iszero(cc[k,l])]
-    end
-    end
-    end
-    if verbose
-        println("time=", time()-t0)
-    end
     end
 
     LieAlgebra(K, N, dim, p1, p2, nn, S) 
