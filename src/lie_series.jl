@@ -297,8 +297,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                         @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
                 end
         
-                #Threads.@threads for l = 1:length(f1)
-                for l = 1:length(f1)
+                Threads.@threads for l = 1:length(f1)
+                #for l = 1:length(f1)
                     @inbounds j1 = f1[l]
                     @inbounds j2 = f2[l]
                     @inbounds n1 = nn[j1]
