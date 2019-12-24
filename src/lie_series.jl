@@ -38,6 +38,10 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
        return 0
     end
 
+    if @inbounds W2I[l,r]==WI[j]
+        return 1
+    end
+
 
 @inbounds j1 =p1[j]
 @inbounds j2 =p2[j]
@@ -149,7 +153,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     LI = vcat([LI[j:p:end] for j=1:p]...)
     Threads.@threads for li=1:length(LI)
         i = LI[li]
-
+    #Threads.@threads for i=1:length(WW)
         c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
     end
 
@@ -240,6 +244,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
     dim = length(WW)
     S = fill(Array{Int,1}[], dim)
 
+    p = Threads.nthreads()
+
     for n=1:N
         if verbose
             print("n=$n ... ")
@@ -247,8 +253,6 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         i1 = ii[n]
         i2 = ii[n+1]-1 
         hu = unique(hh[i1:i2])
-
-        p = Threads.nthreads()
 
         #LI = 1:length(hu)
         #LI = vcat([LI[j:p:end] for j=1:p]...)
@@ -286,19 +290,20 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         
                 for l=1:n
                     for r=l:n
-                        @inbounds W2I[l,r] = word2index(K, w, l,r) 
+                        @inbounds W2I[l, r] = word2index(K, w, l, r) 
                     end
                 end
 
                 @inbounds J = [j for j=i1:i-1 if h==hh[j]]
-                J = vcat([J[j:p:end] for j=1:p]...)
-                Threads.@threads for jj=1:length(J)
+                LI = 1:length(J)
+                LI = vcat([LI[j:p:end] for j=1:p]...)
+                Threads.@threads for li = 1:length(LI)
+                    @inbounds jj = LI[li]
                     @inbounds j = J[jj]
-                        @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
+                    @inbounds C[jj] = coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M) 
                 end
-        
+
                 Threads.@threads for l = 1:length(f1)
-                #for l = 1:length(f1)
                     @inbounds j1 = f1[l]
                     @inbounds j2 = f2[l]
                     @inbounds n1 = nn[j1]
