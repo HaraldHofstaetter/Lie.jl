@@ -145,17 +145,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         print("coeffs of words...")
     end
 
-    p = Threads.nthreads()
-
     c = zeros(T, length(WW))
-
-    #LI = 1:length(WW)
-    #LI = vcat([LI[j:p:end] for j=1:p]...)
-    #Threads.@threads for li=1:length(LI)
-    #    i = LI[li]
-    ##Threads.@threads for i=1:length(WW)
-    #    c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
-    #end
 
     c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
     e = vcat(zeros(T, N), one(T))
@@ -176,6 +166,8 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         println("time=", time()-t0)
         print("coeffs of basis elements...")
     end
+
+    p = Threads.nthreads()
 
     for n=1:N
         i1 = ii[n]
