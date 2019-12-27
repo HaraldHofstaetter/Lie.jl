@@ -1,17 +1,17 @@
 function multi_degree(K::Int, w::Vector{Int}, l::Int, r::Int)
     h = zeros(Int, K)
     for i=l:r 
-        h[w[i]+1] += 1
+        @inbounds h[w[i]+1] += 1
     end
     h
 end
 
 
 @inline function word2index(K::Int, w::Vector{Int}, l::Int, r::Int)
-    x = w[r]
+    @inbounds x = w[r]
     y = K
     for j=r-1:-1:l
-        x += w[j]*y
+        @inbounds x += w[j]*y
         y *= K
     end
     x + div(y-1, K-1)
@@ -149,12 +149,27 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
     c = zeros(T, length(WW))
 
-    LI = 1:length(WW)
-    LI = vcat([LI[j:p:end] for j=1:p]...)
-    Threads.@threads for li=1:length(LI)
-        i = LI[li]
-    #Threads.@threads for i=1:length(WW)
-        c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
+    #LI = 1:length(WW)
+    #LI = vcat([LI[j:p:end] for j=1:p]...)
+    #Threads.@threads for li=1:length(LI)
+    #    i = LI[li]
+    ##Threads.@threads for i=1:length(WW)
+    #    c[i] = wcoeff(Word(G[WW[i] .+ 1]), S, T=T)
+    #end
+
+    c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
+    e = vcat(zeros(T, N), one(T))
+    Threads.@threads for i=ii[N]:ii[N+1]-1
+        @inbounds w = Word(G[WW[i] .+ 1])
+        t = phi(w, S, e)
+        @inbounds c[i] = t[1]
+        k = 1
+        j = i
+        @inbounds while p1[j]==1
+            k += 1            
+            @inbounds j = p2[j]
+            @inbounds c[j] = t[k]
+        end
     end
 
     if verbose
@@ -192,11 +207,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                  end
                                                       
                  for j=i1:i-1
-                 @inbounds if h==hh[j]
-                     @inbounds if !iszero(c[j])
+                     @inbounds if h==hh[j] && !iszero(c[j])
                          @inbounds c[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*c[j]
                      end
-                 end
                  end
              end
              end
@@ -222,6 +235,7 @@ mutable struct LieAlgebra
     p1::Vector{Int}
     p2::Vector{Int}
     nn::Vector{Int}
+    ii::Vector{Int}
     S::Vector{Vector{Vector{Int}}} 
 end
 
@@ -338,7 +352,7 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         end
     end
 
-    LieAlgebra(K, N, dim, p1, p2, nn, S) 
+    LieAlgebra(K, N, dim, p1, p2, nn, ii, S) 
 end
 
 
@@ -383,10 +397,9 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
     @assert alpha.L == beta.L && alpha.L == gamma.L
     @assert gamma!=alpha && gamma!=beta
     L = alpha.L
-    Threads.@threads for i=1:L.dim
-        @inbounds if L.nn[i] > order
-            @inbounds gamma.c[i] = 0 
-        else 
+    order = max(order, L.N)
+    gamma.c[L.ii[order+1]:end] .= 0
+    Threads.@threads for i=1:L.ii[order+1]-1 
         @inbounds uu = L.S[i]
         m = length(uu) 
         h = zero(T)
@@ -394,7 +407,6 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
             @inbounds h += uu[j][3]*(alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]])
         end
         @inbounds gamma.c[i] = h
-        end
     end
 end
 
