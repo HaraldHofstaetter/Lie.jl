@@ -389,16 +389,18 @@ function commutator!(gamma::LieSeries{T}, alpha::LieSeries{T}, beta::LieSeries{T
     @assert alpha.L == beta.L && alpha.L == gamma.L
     @assert gamma!=alpha && gamma!=beta
     L = alpha.L
-    order = max(order, L.N)
-    gamma.c[L.ii[order+1]:end] .= 0
-    Threads.@threads for i=1:L.ii[order+1]-1 
+    Threads.@threads for i=1:L.dim
+        @inbounds if L.nn[i] > order
+            @inbounds gamma.c[i] = 0
+        else
         @inbounds uu = L.S[i]
-        m = length(uu) 
+        m = length(uu)
         h = zero(T)
         for j=1:length(uu)
             @inbounds h += uu[j][3]*(alpha.c[uu[j][1]]*beta.c[uu[j][2]] - beta.c[uu[j][1]]*alpha.c[uu[j][2]])
         end
         @inbounds gamma.c[i] = h
+        end
     end
 end
 
