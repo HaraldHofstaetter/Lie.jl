@@ -129,13 +129,18 @@ end
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
                T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false)
+               lists_output::Bool=false, bch_specific::Bool=false)
     t0 = time()
     if verbose
         print("initializing...")
     end
     K = length(G)
     @assert K>=2 && allunique(G)
+
+    if bch_specific
+        S = log(exp(G[1])*exp(G[2]))
+    end
+
     M = min(M, N)
 
     p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
@@ -150,6 +155,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
     e = vcat(zeros(T, N), one(T))
     Threads.@threads for i=ii[N]:ii[N+1]-1
+        if bch_specific && iseven(N) && p1[i]!=1
+            continue
+        end
         @inbounds w = Word(G[WW[i] .+ 1])
         t = phi(w, S, e)
         @inbounds c[i] = t[1]
@@ -184,6 +192,10 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
             for i=i1:i2
             @inbounds if h==hh[i]
+                 if bch_specific && iseven(n) && p1[i]!=1
+                     c[i]=0
+                     continue
+                 end
                  @inbounds w = WW[i]
 
                  for l=1:n
