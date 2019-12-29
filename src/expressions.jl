@@ -1,15 +1,18 @@
 abstract type AlgebraElement end
 
 struct Generator <: AlgebraElement
-    name   ::String
+    name ::String
+    hash ::UInt64 
     #degree ::Int
-    #function Generator(name, degree)
-    #    @assert degree>=1 "degree has to be >=1"
-    #    new(name, degree)
-    #end
+    function Generator(name)
+        h = hash(name)
+        new(name, h)
+    end
 end
 
-#Generator(name::String) = Generator(name, 1)
+import Base.==
+
+==(g1::Generator, g2::Generator) = g1.hash==g2.hash
 
 Base.show(io::IO, g::Generator) = print(io, g.name)
 
