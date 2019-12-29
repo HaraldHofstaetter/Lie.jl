@@ -118,6 +118,89 @@ function phi(w::Word, l::Logarithm, v::Vector)
     r
 end
 
+################################
+function phi!(y::Vector{T}, w::Word, g::Generator, v::Vector{T}) where T 
+    n = length(w)
+    for j=1:n
+        @inbounds if w[j]==g
+            @inbounds y[j] = v[j+1]
+        else
+            @inbounds y[j] = zero(T) 
+        end
+    end
+    @inbounds y[n+1] = zero(T) 
+end
+
+
+function phi!(y::Vector{T}, w::Word, t::Term, v::Vector{T}) where T 
+    phi!(y, w, t.e, v)
+    y[:] *= t.c
+end
+
+function phi!(y::Vector{T}, w::Word, l::LinearCombination, v::Vector{T}) where T 
+    s = zeros(T, length(w)+1) 
+    z = similar(y)
+    for i=1:length(l.l)
+        @inbounds phi!(z, w, l.l[i], v)
+        s[:] += z
+    end
+    copyto!(y, s)
+end
+
+function phi!(y::Vector{T}, w::Word, p::Product, v::Vector{T}) where T
+    copyto!(y, v)
+    for i=length(p.p):-1:1
+        if iszero(y)
+            return y
+        end
+        @inbounds phi!(y, w, p.p[i], y)
+    end
+end
+
+function phi!(y::Vector{T}, w::Word, c::SimpleCommutator, v::Vector{T}) where T 
+    z1 = similar(v)
+    z2 = similar(v)
+    phi!(z1, w, c.y, v)
+    phi!(z1, w, c.x, z1)
+    phi!(z2, w, c.x, v)
+    phi!(z2, w, c.y, z2)
+    y[:] += z1
+    y[:] -= z2
+end
+
+function phi!(y::Vector{T}, w::Word, e::Exponential, v::Vector{T}) where T
+    z = copy(v)
+    copyto!(y, v)
+    for k=1:length(w)
+        phi!(z, w, e.e, z)
+        if iszero(z)
+            return 
+        end
+        f = factorial(k)
+        for i=1:length(w)+1
+            @inbounds y[i] += z[i]/f
+        end
+    end
+end
+
+function phi!(y::Vector{T}, w::Word, l::Logarithm, v::Vector{T}) where T
+    z = copy(v)
+    lm1 = l.e-Id
+    copyto!(y, v)
+    for k=1:length(w)
+        phi!(z, w, lm1, z)
+        if iszero(z)
+            return 
+        end
+        f = (-1)^(k+1)*k
+        for i=1:length(w)+1
+            @inbounds y[i] += z[i]/f
+        end
+    end
+end
+
+################################
+
 
 wcoeff(w::Word, S::AlgebraElement; T::Type=Rational{Int}) = phi(w, S, vcat(zeros(T,length(w)), one(T)))[1] 
 #wcoeff(W::Array{Word,1}, S::AlgebraElement; T::Type=Rational{Int}) = [wcoeff(w, S, T=T) for w in W]

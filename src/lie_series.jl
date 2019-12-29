@@ -167,14 +167,23 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
     c = zeros(T, length(WW))
 
-    c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
+    p = Threads.nthreads()
+    tt = [zeros(T, N+1) for i=1:p]
+
+    t1 = zeros(T, 2)
+    phi!(t1, Word(G[WW[1] .+ 1]), S, T[0,1] )
+    c[1] = t1[1]
+    #c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
+
     e = vcat(zeros(T, N), one(T))
     Threads.@threads for i=ii[N]:ii[N+1]-1
+        t = tt[Threads.threadid()]
         if bch_specific && iseven(N) && p1[i]!=1
             continue
         end
         @inbounds w = Word(G[WW[i] .+ 1])
-        t = phi(w, S, e)
+        phi!(t, w, S, e)
+        #t = phi(w, S, e)
         @inbounds c[i] = t[1]
         k = 1
         j = i
@@ -189,8 +198,6 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         println("time=", time()-t0)
         print("coeffs of basis elements...")
     end
-
-    p = Threads.nthreads()
 
     for n=1:N
         i1 = ii[n]
