@@ -151,7 +151,7 @@ function phi!(y::Vector{T}, w::Word, p::Product, v::Vector{T}) where T
     copyto!(y, v)
     for i=length(p.p):-1:1
         if iszero(y)
-            return y
+            return 
         end
         @inbounds phi!(y, w, p.p[i], y)
     end
@@ -182,6 +182,23 @@ function phi!(y::Vector{T}, w::Word, e::Exponential, v::Vector{T}) where T
         end
     end
 end
+
+#following variant of last one needed for words of length >=21 
+function phi!(y::Vector{Rational{T}}, w::Word, e::Exponential, v::Vector{Rational{T}}) where T<:Integer
+    z = copy(v)
+    copyto!(y, v)
+    for k=1:length(w)
+        phi!(z, w, e.e, z)
+        if iszero(z)
+            return 
+        end
+        f = factorial(T(k)) # compute factorial with Integer type T
+        for i=1:length(w)+1
+            @inbounds y[i] += z[i]/f
+        end
+    end
+end
+
 
 function phi!(y::Vector{T}, w::Word, l::Logarithm, v::Vector{T}) where T
     z = copy(v)
