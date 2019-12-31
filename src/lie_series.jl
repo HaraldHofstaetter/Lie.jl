@@ -173,7 +173,6 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     t1 = zeros(T, 2)
     phi!(t1, Word(G[WW[1] .+ 1]), S, T[0,1] )
     c[1] = t1[1]
-    #c[1] = phi(Word(G[WW[1] .+ 1]), S, T[0,1] )[1]
 
     e = vcat(zeros(T, N), one(T))
     Threads.@threads for i=ii[N]:ii[N+1]-1
@@ -183,7 +182,6 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         end
         @inbounds w = Word(G[WW[i] .+ 1])
         phi!(t, w, S, e)
-        #t = phi(w, S, e)
         @inbounds c[i] = t[1]
         k = 1
         j = i
@@ -199,6 +197,9 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         print("coeffs of basis elements...")
     end
 
+    den = lcm(denominator.(c))
+    cc = numerator.(den*c)
+
     for n=1:N
         i1 = ii[n]
         i2 = ii[n+1]-1 
@@ -213,7 +214,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
             for i=i1:i2
             @inbounds if h==hh[i]
                  if bch_specific && iseven(n) && p1[i]!=1
-                     c[i]=0
+                     cc[i]=0
                      continue
                  end
                  @inbounds w = WW[i]
@@ -231,14 +232,16 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                  end
                                                       
                  for j=i1:i-1
-                     @inbounds if h==hh[j] && !iszero(c[j])
-                         @inbounds c[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*c[j]
+                     @inbounds if h==hh[j] && !iszero(cc[j])
+                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*cc[j]
                      end
                  end
              end
              end
          end
     end
+
+    c = cc//den
 
     if verbose
         println("time=", time()-t0)
