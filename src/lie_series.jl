@@ -147,6 +147,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     t0 = time()
     if verbose
         print("initializing...")
+        flush(stdout)
     end
     K = length(G)
     @assert K>=2 && allunique(G)
@@ -163,6 +164,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     if verbose
         println("time=", time()-t0)
         print("coeffs of words...")
+        flush(stdout)
     end
 
     c = zeros(T, length(WW))
@@ -194,20 +196,26 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
     if verbose
         println("time=", time()-t0)
-        print("coeffs of basis elements...")
+        println("coeffs of basis elements...")
+        flush(stdout)
     end
 
     den = lcm(denominator.(c))
     cc = numerator.(den*c)
 
     for n=1:N
+        if verbose
+            print("n=$n ... ")
+            flush(stdout)
+        end
+
         i1 = ii[n]
         i2 = ii[n+1]-1 
 
         hu = n==1 ? (1:K) : (Lie.hom_index(vcat(zeros(Int, K-1),n))+1:Lie.hom_index(vcat(n,zeros(Int, K-1)))-1) 
         hu = vcat([hu[j:p:end] for j=1:p]...)
         Threads.@threads for h in hu
-
+            j1 = 0
             H = zeros(Int, n, n)
             W2I = zeros(Int, n, n)
 
@@ -216,6 +224,10 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                  if bch_specific && iseven(n) && p1[i]!=1
                      cc[i]=0
                      continue
+                 end
+
+                 if iszero(j1)
+                     j1 = i
                  end
                  @inbounds w = WW[i]
 
@@ -230,8 +242,8 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                          @inbounds W2I[l,r] = word_index(K, w, l,r) 
                      end
                  end
-                                                      
-                 for j=i1:i-1
+
+                 for j=j1:i-1
                      @inbounds if h==hh[j] && !iszero(cc[j])
                          @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*cc[j]
                      end
@@ -239,14 +251,14 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
              end
              end
          end
+         if verbose
+            println("time=", time()-t0)
+            flush(stdout)
+         end
     end
 
     c = cc//den
 
-    if verbose
-        println("time=", time()-t0)
-    end
-    
     if lists_output
         return p1, p2, nn, c
     else
@@ -292,6 +304,7 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
     for n=1:N
         if verbose
             print("n=$n ... ")
+            flush(stdout)
         end
         i1 = ii[n]
         i2 = ii[n+1]-1 
@@ -373,6 +386,7 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
         end
         if verbose
             println("time=", time()-t0)
+            flush(stdout)
         end
     end
 
@@ -461,6 +475,7 @@ function BCH(L::LieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Floa
     for n=2:L.N        
         if verbose
             print("n=$(n), p=")
+            flush(stdout)
         end
         V.c[:] .= 0
         # U = X+Y
@@ -470,6 +485,7 @@ function BCH(L::LieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Floa
         for p=1:div(n-1, 2)
             if verbose
                 print("$(p),")
+                flush(stdout)
             end
             commutator!(H,Z,U,order=n) #H=[Z,U]
             commutator!(U,Z,H,order=n) #U=[Z,H]
@@ -488,6 +504,7 @@ function BCH(L::LieAlgebra; T::Type=Rational{Int}, verbose::Bool=false, t0::Floa
         end
         if verbose
             println(" time=",time()-t0);
+            flush(stdout)
         end
     end
     Z
@@ -500,10 +517,12 @@ function BCH1(G::Vector{Generator}, N::Int;
     t0 = time()
     if verbose
         println("initializing Lie algebra ...")
+        flush(stdout)
     end
     L = LieAlgebra(2, N, M=M, verbose=verbose, t0=t0)
     if verbose
         println("evaluating recursion formula ...")
+        flush(stdout)
     end
     Z = BCH(L, T=T, verbose=verbose, t0=t0)
     gen_expression(G, Z.c[1:L.dim], L.p1, L.p2)
