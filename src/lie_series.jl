@@ -362,27 +362,27 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                     @inbounds if WI[i]<WI12[l] || (WI[i]==WI12[l] && (first_smaller[l] ? WW[j1]<WW[p1[i]] : WW[j2]<WW[p1[i]]))
                         @inbounds cc[k,l] = 0  # see M.Lothaire: Combinatorics on words Lemma 5.3.3
                     else 
-                    @inbounds n1 = nn[j1]
-                    @inbounds n2 = nn[j2]
-                    #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    #if c1!=0
-                    #    c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    #end
-                    #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    #if c2!=0
-                    #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    #end
-        
-                    c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    if c1!=0
-                        c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    end
-                    c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    if c2!=0
-                        c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
-                    end
-        
-                    @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
+                        @inbounds n1 = nn[j1]
+                        @inbounds n2 = nn[j2]
+                        #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        #if c1!=0
+                        #    c1 *= coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        #end
+                        #c2 = coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        #if c2!=0
+                        #    c2 *= coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        #end
+            
+                        c1 = coeff(K, w, n1+1, n, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        if c1!=0
+                            c1 *= coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        end
+                        c2 = coeff(K, w, 1, n2, j2, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        if c2!=0
+                            c2 *= coeff(K, w, n2+1, n,  j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        end
+            
+                        @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
                     end
                 end
                 @inbounds S[i] = [[f1[l], f2[l], cc[k,l]] 
