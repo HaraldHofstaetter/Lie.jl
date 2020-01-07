@@ -107,7 +107,7 @@ function LieAlgebra(T::TreeAlgebra; verbose::Bool=false, t0::Float64=time())
         #push!(TTT, time()-t1)
     end
 
-    LieAlgebra(T.K, T.N, T.dim, T.p1, T.p2, T.nn[1:T.dim], S) #, CCC, TTT
+    LieAlgebra(T.K, T.N, T.dim, T.p1, T.p2, T.nn[1:T.dim], ii, S) #, CCC, TTT
 end
 
 

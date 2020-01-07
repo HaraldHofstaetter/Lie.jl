@@ -321,6 +321,8 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                             for j1 = ii[n1] : ii[n1+1]-1
                             for j2 = max(j1+1, ii[n-n1]) : ii[n-n1+1]-1
                             if MD[j1]+MD[j2]==md] 
+            @inbounds first_smaller = [WW[f1[l]]<WW[f2[l]] for l=1:length(f1)]
+            @inbounds WI12 = [first_smaller[l] ? 2^nn[f2[l]]*WI[f1[l]]+WI[f2[l]] : 2^nn[f1[l]]*WI[f2[l]]+WI[f1[l]] for l=1:length(f1)]
             cc = zeros(Int, m, length(f1)) 
             H = zeros(Int, n, n)
             W2I = zeros(Int, n, n)
@@ -357,6 +359,9 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                 Threads.@threads for l = 1:length(f1)
                     @inbounds j1 = f1[l]
                     @inbounds j2 = f2[l]
+                    @inbounds if WI[i]<WI12[l] || (WI[i]==WI12[l] && (first_smaller[l] ? WW[j1]<WW[p1[i]] : WW[j2]<WW[p1[i]]))
+                        @inbounds cc[k,l] = 0  # see M.Lothaire: Combinatorics on words Lemma 5.3.3
+                    else 
                     @inbounds n1 = nn[j1]
                     @inbounds n2 = nn[j2]
                     #c1 = coeff(K, w, 1, n1, j1, p1, p2, nn, hh, H, WI, W2I, CT, M)
@@ -378,6 +383,7 @@ function LieAlgebra(K::Int, N::Int; M::Int=0, verbose::Bool=false, t0::Float64=t
                     end
         
                     @inbounds cc[k, l] = c1 - c2 - SSS(cc, C, k, l)
+                    end
                 end
                 @inbounds S[i] = [[f1[l], f2[l], cc[k,l]] 
                                      for l=1:length(f1) if !iszero(cc[k,l])]
