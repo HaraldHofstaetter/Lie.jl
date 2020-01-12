@@ -143,7 +143,7 @@ end
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
                T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false, new_alg::Bool=false)
+               lists_output::Bool=false, bch_specific::Bool=false)
     t0 = time()
     if verbose
         print("initializing...")
