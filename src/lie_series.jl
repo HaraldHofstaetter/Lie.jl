@@ -143,7 +143,7 @@ end
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
                T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false)
+               lists_output::Bool=false, bch_specific::Bool=false, new_alg::Bool=false)
     t0 = time()
     if verbose
         print("initializing...")
@@ -203,60 +203,78 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     den = lcm(denominator.(c))
     cc = numerator.(den*c)
 
-    for n=1:N
-        if verbose
-            print("n=$n ... ")
-            flush(stdout)
-        end
+    i1 = ii[N]
+    i2 = ii[N+1]-1
+    hu = Lie.hom_index(vcat(zeros(Int, K-1),N))+1:Lie.hom_index(vcat(N,zeros(Int, K-1)))-1
+    hu = vcat([hu[j:p:end] for j=1:p]...)
+    Threads.@threads for h in hu
+        j1 = 0
+        H = zeros(Int, N, N)
+        W2I = zeros(Int, N, N)
+        JW = zeros(Int, N)
+        JB = zeros(Int, N)
 
-        i1 = ii[n]
-        i2 = ii[n+1]-1 
-
-        hu = n==1 ? (1:K) : (Lie.hom_index(vcat(zeros(Int, K-1),n))+1:Lie.hom_index(vcat(n,zeros(Int, K-1)))-1) 
-        hu = vcat([hu[j:p:end] for j=1:p]...)
-        Threads.@threads for h in hu
-            j1 = 0
-            H = zeros(Int, n, n)
-            W2I = zeros(Int, n, n)
-
-            for i=i1:i2
+        for i=i1:i2
             @inbounds if h==hh[i]
-                 if bch_specific && iseven(n) && p1[i]!=1
-                     cc[i]=0
-                     continue
-                 end
+                if bch_specific && iseven(N) && p1[i]!=1
+                    cc[i]=0
+                    continue
+                end
 
-                 if iszero(j1)
-                     j1 = i
-                 end
-                 @inbounds w = WW[i]
+                if iszero(j1)
+                    j1 = i
+                end
 
-                 for l=1:n
-                     for r=1:n
-                         @inbounds H[l, r] = l<=r ? multi_degree_index(K, w, l, r) : 0 
-                     end
-                 end
+                @inbounds w = WW[i]
 
-                 for l=1:n
-                     for r=l:n
-                         @inbounds W2I[l,r] = word_index(K, w, l,r) 
-                     end
-                 end
+                kW = 1
+                @inbounds JW[1] = i
+                l = i
+                @inbounds while p1[l]==1
+                    kW += 1            
+                    @inbounds l = p2[l]
+                    @inbounds JW[kW] = l 
+                end
 
-                 for j=j1:i-1
-                     @inbounds if h==hh[j] && !iszero(cc[j])
-                         @inbounds cc[i] -= coeff(K, w, 1, n, j, p1, p2, nn, hh, H, WI, W2I, CT, M)*cc[j]
-                     end
-                 end
-             end
-             end
-         end
-         if verbose
-            println("time=", time()-t0)
-            flush(stdout)
-         end
+                for l=1:N
+                    for r=1:N
+                        @inbounds H[l, r] = l<=r ? multi_degree_index(K, w, l, r) : 0 
+                    end
+                end
+
+                for l=1:N
+                    for r=l:N
+                        @inbounds W2I[l,r] = word_index(K, w, l,r) 
+                    end
+                end
+
+                for j=j1:i-1
+                    @inbounds if h==hh[j]
+                        kB = 1
+                        @inbounds JB[1] = j
+                        l = j
+                        @inbounds while kB<kW && p1[l]==1
+                            kB += 1            
+                            @inbounds l = p2[l]
+                            @inbounds JB[kB] = l 
+                        end
+                        @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        if !iszero(d)
+                            for l=1:kB
+                                @inbounds cc[JW[l]] -= d*cc[JB[l]]
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
 
+    if verbose
+       println("time=", time()-t0)
+       flush(stdout)
+    end
+        
     c = cc//den
 
     if lists_output
