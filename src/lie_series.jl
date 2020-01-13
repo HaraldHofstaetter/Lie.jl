@@ -140,137 +140,10 @@ function init_lie(K::Int, N::Int, M::Int)
 end
 
 
-function coeffs_words(denom::T, G::Vector{Generator}, S::AlgebraElement, N::Int,
-                      W::Array{Array{Int,1},1}, ii::Array{Int,1}, p1::Array{Int,1}, p2::Array{Int,1},
-                      bch_specific::Bool) where T<:Number
-    c = zeros(T, length(W))
-
-    p = Threads.nthreads()
-    tt = [zeros(T, N+1) for i=1:p]
-
-    t1 = zeros(T, 2)
-    phi!(t1, Word(G[W[1] .+ 1]), S, [zero(T), denom] )
-    c[1] = t1[1]
-
-    e = vcat(zeros(T, N), denom)
-    Threads.@threads for i=ii[N]:ii[N+1]-1
-        t = tt[Threads.threadid()]
-        if bch_specific && iseven(N) && p1[i]!=1
-            continue
-        end
-        @inbounds w = Word(G[W[i] .+ 1])
-        phi!(t, w, S, e)
-        @inbounds c[i] = t[1]
-        k = 1
-        j = i
-        @inbounds while p1[j]==1
-            k += 1            
-            @inbounds j = p2[j]
-            @inbounds c[j] = t[k]
-        end
-    end
-
-    return c
-end
-
-
-function coeffs_basis_elements!(c::Array{T,1}, K::Int, N::Int,  
-                      W::Array{Array{Int,1},1}, ii::Array{Int,1}, p1::Array{Int,1}, p2::Array{Int,1}, 
-                      nn::Array{Int,1}, hh::Array{Int,1}, WI::Array{Int}, CT::Array{Int,2}, M::Int,
-                      bch_specific::Bool, new_alg::Bool) where T<:Number
-    if new_alg
-        @assert K==2
-        BC = [(-1)^k*binomial(n,k) for n=1:N, k=1:N]
-    end
-    p = Threads.nthreads()
-    i1 = ii[N]
-    i2 = ii[N+1]-1
-    hu = Lie.hom_index(vcat(zeros(Int, K-1),N))+1:Lie.hom_index(vcat(N,zeros(Int, K-1)))-1
-    hu = vcat([hu[j:p:end] for j=1:p]...)
-    Threads.@threads for h in hu
-        j1 = 0
-        H = zeros(Int, N, N)
-        W2I = zeros(Int, N, N)
-        JW = zeros(Int, N)
-        JB = zeros(Int, N)
-
-        ih = 0
-        for i=i1:i2
-            @inbounds if h==hh[i]
-                ih += 1
-                if bch_specific && iseven(N) && p1[i]!=1
-                    c[i]=0
-                    continue
-                end
-
-                if iszero(j1)
-                    j1 = i
-                end
-
-                @inbounds w = W[i]
-                nB = sum(w)  
-
-                kW = 1
-                @inbounds JW[1] = i
-                l = i
-                @inbounds while p1[l]==1
-                    kW += 1            
-                    @inbounds l = p2[l]
-                    @inbounds JW[kW] = l 
-                end
-
-                for l=1:N
-                    for r=1:N
-                        @inbounds H[l, r] = l<=r ? multi_degree_index(K, w, l, r) : 0 
-                    end
-                end
-
-                for l=1:N
-                    for r=l:N
-                        @inbounds W2I[l,r] = word_index(K, w, l,r) 
-                    end
-                end
-
-                jh = 0
-                for j=j1:i-1
-                    @inbounds if h==hh[j]
-                        kB = 1
-                        @inbounds JB[1] = j
-                        l = j
-                        @inbounds while kB<kW && p1[l]==1
-                            kB += 1            
-                            @inbounds l = p2[l]
-                            @inbounds JB[kB] = l 
-                        end
-                        if new_alg 
-                            jh += 1
-                            if ih+jh <= nB+1
-                                d = BC[nB+1-jh, ih-jh]
-                            elseif jh==1 && ih>nB
-                                d = 0
-                            else
-                                @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
-                            end
-                        else
-                            @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
-                        end
-                        if !iszero(d)
-                            for l=1:kB
-                                @inbounds c[JW[l]] -= d*c[JB[l]]
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               denom::T=1, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false, new_alg::Bool=false) where T<:Integer
+               denom::T, verbose::Bool=false, M::Int=0,
+               lists_output::Bool=false, bch_specific::Bool=false) where T<: Integer
     t0 = time()
     if verbose
         print("initializing...")
@@ -286,45 +159,107 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
 
     M = min(M, N)
 
-    p1, p2, nn, W, ii, hh, CT, WI = init_lie(K, N, M)
+    p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
 
     if verbose
         println("time=", time()-t0)
-        print("coeffs of words...")
+        print("coeffs...")
         flush(stdout)
     end
 
-    if isone(denom)
-        c = coeffs_words(Rational{T}(1), G, S, N, W, ii, p1, p2, bch_specific)
-        den = lcm(denominator.(c))
-        cc = numerator.(den*c)
-    else
-        cc = coeffs_words(denom, G, S, N, W, ii, p1, p2, bch_specific)
-        den = denom
+    c = zeros(T, length(WW))
+
+    t1 = zeros(T, 2)
+    phi!(t1, Word(G[WW[1] .+ 1]), S, T[0,denom] )
+    c[1] = t1[1]
+    e = vcat(zeros(T, N), denom)
+
+    p = Threads.nthreads()
+    i1 = ii[N]
+    i2 = ii[N+1]-1
+    hu = Lie.hom_index(vcat(zeros(Int, K-1),N))+1:Lie.hom_index(vcat(N,zeros(Int, K-1)))-1
+    hu = vcat([hu[j:p:end] for j=1:p]...)
+    Threads.@threads for h in hu
+        j1 = 0
+        H = zeros(Int, N, N)
+        W2I = zeros(Int, N, N)
+        JW = zeros(Int, N)
+        JB = zeros(Int, N)
+        t = zeros(T, N+1) 
+
+        for i=i1:i2
+            @inbounds if h==hh[i]
+                if bch_specific && iseven(N) && p1[i]!=1
+                    c[i]=0
+                    continue
+                end
+
+                if iszero(j1)
+                    j1 = i
+                end
+
+                @inbounds w = WW[i]
+                phi!(t, Word(G[w .+ 1]), S, e) 
+                @inbounds c[i] = t[1] 
+
+                kW = 1
+                @inbounds JW[1] = i
+                l = i
+                @inbounds while p1[l]==1
+                    kW += 1            
+                    @inbounds l = p2[l]
+                    @inbounds JW[kW] = l 
+                    @inbounds c[l] = t[kW] 
+                end
+
+                for l=1:N
+                    for r=1:N
+                        @inbounds H[l, r] = l<=r ? multi_degree_index(K, w, l, r) : 0 
+                    end
+                end
+
+                for l=1:N
+                    for r=l:N
+                        @inbounds W2I[l,r] = word_index(K, w, l,r) 
+                    end
+                end
+
+                for j=j1:i-1
+                    @inbounds if h==hh[j]
+                        kB = 1
+                        @inbounds JB[1] = j
+                        l = j
+                        @inbounds while kB<kW && p1[l]==1
+                            kB += 1            
+                            @inbounds l = p2[l]
+                            @inbounds JB[kB] = l 
+                        end
+                         @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        if !iszero(d)
+                            for l=1:kB
+                                @inbounds c[JW[l]] -= d*c[JB[l]]
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
-
-    if verbose
-        println("time=", time()-t0)
-        print("coeffs of basis elements...")
-        flush(stdout)
-    end
-
-
-    coeffs_basis_elements!(cc, K, N, W, ii, p1, p2, nn, hh, WI, CT, M, bch_specific, new_alg)
-
-    c = cc//den
 
     if verbose
        println("time=", time()-t0)
        flush(stdout)
     end
         
+    cc = c//denom
+
     if lists_output
-        return p1, p2, nn, c
+        return p1, p2, nn, cc
     else
-        return gen_expression(G, c, p1, p2)
+        return gen_expression(G, cc, p1, p2)
     end
 end
+
 
 
 mutable struct LieAlgebra
