@@ -217,14 +217,14 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                 end
 
                 for l=1:N
-                    for r=1:N
-                        @inbounds H[l, r] = l<=r ? multi_degree_index(K, w, l, r) : 0 
+                    for r=l:N
+                        @inbounds H[l, r] = multi_degree_index(K, w, l, r) 
                     end
                 end
 
                 for l=1:N
                     for r=l:N
-                        @inbounds W2I[l,r] = word_index(K, w, l,r) 
+                        @inbounds W2I[l, r] = word_index(K, w, l, r) 
                     end
                 end
 
@@ -238,7 +238,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                             @inbounds l = p2[l]
                             @inbounds JB[kB] = l 
                         end
-                         @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
+                        @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
                         if !iszero(d)
                             for l=1:kB
                                 @inbounds c[JW[l]] -= d*c[JB[l]]
