@@ -62,27 +62,27 @@ function coeff(K::Int, w::Vector{Int}, l::Int, r::Int, j::Int,
 @inbounds m1 = nn[j1]
 @inbounds m2 = nn[j2]
 
-    @inbounds if WI[j1]<WI[j2]
-        c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, WI, W2I, CT, M)
-        if c1!=0
-            c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
-        end
+    #@inbounds if WI[j1]<WI[j2]
+    #    c1 = coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, WI, W2I, CT, M)
+    #    if c1!=0
+    #        c1 *= coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
+    #    end
     
         c2 = coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c2!=0
             c2 *= coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
-    else
+    #else
         c1 = coeff(K, w, l+m1, r, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
         if c1!=0
             c1 *= coeff(K, w, l, l+m1-1, j1, p1, p2, nn, h, H, WI, W2I, CT, M)
         end
     
-        c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
-        if c2!=0
-            c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, WI, W2I, CT, M)
-        end
-    end
+    #    c2 = coeff(K, w, l, l+m2-1, j2, p1, p2, nn, h, H, WI, W2I, CT, M)
+    #    if c2!=0
+    #        c2 *= coeff(K, w, l+m2, r,  j1, p1, p2, nn, h, H, WI, W2I, CT, M)
+    #    end
+    #end
 
     c1 - c2
 end
@@ -142,8 +142,8 @@ end
 
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               denom::T=N<=16 ? Int(1) : Int128(1),
-               verbose::Bool=false, M::Int=0, lists_output::Bool=false, bch_specific::Bool=false) where T<: Integer
+               denom::T=N<=16 ? Int(1) : Int128(1), bch_specific::Bool=false,
+               verbose::Bool=false, M::Int=10, lists_output::Bool=false) where T<: Integer
     t0 = time()
     if verbose
         print("initializing...")
@@ -203,7 +203,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                 end
 
                 @inbounds w = WW[i]
-                phi!(t, Word(G[w .+ 1]), S, e) 
+                @inbounds phi!(t, Word(G[w .+ 1]), S, e) 
                 @inbounds c[i] = t[1] 
 
                 kW = 1
