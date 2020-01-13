@@ -140,7 +140,7 @@ function init_lie(K::Int, N::Int, M::Int)
 end
 
 
-function coeffs_words(denominator::T, G::Vector{Generator}, S::AlgebraElement, N::Int,
+function coeffs_words(denom::T, G::Vector{Generator}, S::AlgebraElement, N::Int,
                       W::Array{Array{Int,1},1}, ii::Array{Int,1}, p1::Array{Int,1}, p2::Array{Int,1},
                       bch_specific::Bool) where T<:Number
     c = zeros(T, length(W))
@@ -149,10 +149,10 @@ function coeffs_words(denominator::T, G::Vector{Generator}, S::AlgebraElement, N
     tt = [zeros(T, N+1) for i=1:p]
 
     t1 = zeros(T, 2)
-    phi!(t1, Word(G[W[1] .+ 1]), S, [zero(T), denominator] )
+    phi!(t1, Word(G[W[1] .+ 1]), S, [zero(T), denom] )
     c[1] = t1[1]
 
-    e = vcat(zeros(T, N), one(T))
+    e = vcat(zeros(T, N), denom)
     Threads.@threads for i=ii[N]:ii[N+1]-1
         t = tt[Threads.threadid()]
         if bch_specific && iseven(N) && p1[i]!=1
@@ -250,8 +250,8 @@ end
 
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false)
+               denom::T=1, verbose::Bool=false, M::Int=0,
+               lists_output::Bool=false, bch_specific::Bool=false) where T<:Integer
     t0 = time()
     if verbose
         print("initializing...")
@@ -275,7 +275,14 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         flush(stdout)
     end
 
-    c = coeffs_words(T(1), G, S, N, W, ii, p1, p2, bch_specific)
+    if isone(denom)
+        c = coeffs_words(Rational{T}(1), G, S, N, W, ii, p1, p2, bch_specific)
+        den = lcm(denominator.(c))
+        cc = numerator.(den*c)
+    else
+        cc = coeffs_words(denom, G, S, N, W, ii, p1, p2, bch_specific)
+        den = denom
+    end
 
     if verbose
         println("time=", time()-t0)
@@ -283,18 +290,16 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         flush(stdout)
     end
 
-    den = lcm(denominator.(c))
-    cc = numerator.(den*c)
 
     coeffs_basis_elements!(cc, K, N, W, ii, p1, p2, nn, hh, WI, CT, M, bch_specific)
+
+    c = cc//den
 
     if verbose
        println("time=", time()-t0)
        flush(stdout)
     end
         
-    c = cc//den
-
     if lists_output
         return p1, p2, nn, c
     else

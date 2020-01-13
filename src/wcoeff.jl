@@ -228,8 +228,10 @@ function phi!(y::Vector{T}, w::Word, e::Exponential, v::Vector{T}) where T<:Inte
         end
         f = factorial(T(k))
         for i=1:length(w)+1
-            @assert iszero(mod(z[i], f))
-            @inbounds y[i] += div(z[i], f)
+            #@inbounds y[i] += div(z[i], f)
+            @inbounds (d, r) = divrem(z[i], f)
+            @assert iszero(r) "$(z[i]) not divisible by $f"
+            @inbounds y[i] += d 
         end
     end
 end
@@ -245,8 +247,10 @@ function phi!(y::Vector{T}, w::Word, l::Logarithm, v::Vector{T}) where T<:Intege
         end
         f = (-1)^(k+1)*k
         for i=1:length(w)+1
-            @assert iszero(mod(z[i], f))
-            @inbounds y[i] += div(z[i], f)
+            #@inbounds y[i] += div(z[i], f)
+            @inbounds (d, r) = divrem(z[i], f)
+            @assert iszero(r) "$(z[i]) not divisible by $f"
+            @inbounds y[i] += d 
         end
     end
 end
