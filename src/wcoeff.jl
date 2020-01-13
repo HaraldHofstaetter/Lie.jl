@@ -216,6 +216,43 @@ function phi!(y::Vector{T}, w::Word, l::Logarithm, v::Vector{T}) where T
     end
 end
 
+#for pure Integer arithmetic:
+
+function phi!(y::Vector{T}, w::Word, e::Exponential, v::Vector{T}) where T<:Integer
+    z = copy(v)
+    copyto!(y, v)
+    for k=1:length(w)
+        phi!(z, w, e.e, z)
+        if iszero(z)
+            return 
+        end
+        f = factorial(T(k))
+        for i=1:length(w)+1
+            @assert iszero(mod(z[i], f))
+            @inbounds y[i] += div(z[i], f)
+        end
+    end
+end
+
+function phi!(y::Vector{T}, w::Word, l::Logarithm, v::Vector{T}) where T<:Integer
+    z = copy(v)
+    lm1 = l.e-Id
+    copyto!(y, v)
+    for k=1:length(w)
+        phi!(z, w, lm1, z)
+        if iszero(z)
+            return 
+        end
+        f = (-1)^(k+1)*k
+        for i=1:length(w)+1
+            @assert iszero(mod(z[i], f))
+            @inbounds y[i] += div(z[i], f)
+        end
+    end
+end
+
+
+
 ################################
 
 

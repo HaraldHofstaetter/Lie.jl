@@ -140,40 +140,16 @@ function init_lie(K::Int, N::Int, M::Int)
 end
 
 
-
-function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false)
-    t0 = time()
-    if verbose
-        print("initializing...")
-        flush(stdout)
-    end
-    K = length(G)
-    @assert K>=2 && allunique(G)
-
-    if bch_specific
-        K = 2
-        S = log(exp(G[1])*exp(G[2]))
-    end
-
-    M = min(M, N)
-
-    p1, p2, nn, WW, ii, hh, CT, WI = init_lie(K, N, M)
-
-    if verbose
-        println("time=", time()-t0)
-        print("coeffs of words...")
-        flush(stdout)
-    end
-
-    c = zeros(T, length(WW))
+function coeffs_words(denominator::T, G::Vector{Generator}, S::AlgebraElement, N::Int,
+                      W::Array{Array{Int,1},1}, ii::Array{Int,1}, p1::Array{Int,1}, p2::Array{Int,1},
+                      bch_specific::Bool) where T<:Number
+    c = zeros(T, length(W))
 
     p = Threads.nthreads()
     tt = [zeros(T, N+1) for i=1:p]
 
     t1 = zeros(T, 2)
-    phi!(t1, Word(G[WW[1] .+ 1]), S, T[0,1] )
+    phi!(t1, Word(G[W[1] .+ 1]), S, [zero(T), denominator] )
     c[1] = t1[1]
 
     e = vcat(zeros(T, N), one(T))
@@ -182,7 +158,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         if bch_specific && iseven(N) && p1[i]!=1
             continue
         end
-        @inbounds w = Word(G[WW[i] .+ 1])
+        @inbounds w = Word(G[W[i] .+ 1])
         phi!(t, w, S, e)
         @inbounds c[i] = t[1]
         k = 1
@@ -194,15 +170,15 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         end
     end
 
-    if verbose
-        println("time=", time()-t0)
-        println("coeffs of basis elements...")
-        flush(stdout)
-    end
+    return c
+end
 
-    den = lcm(denominator.(c))
-    cc = numerator.(den*c)
 
+function coeffs_basis_elements!(c::Array{T,1}, K::Int, N::Int,  
+                      W::Array{Array{Int,1},1}, ii::Array{Int,1}, p1::Array{Int,1}, p2::Array{Int,1}, 
+                      nn::Array{Int,1}, hh::Array{Int,1}, WI::Array{Int}, CT::Array{Int,2}, M::Int,
+                      bch_specific::Bool) where T<:Number
+    p = Threads.nthreads()
     i1 = ii[N]
     i2 = ii[N+1]-1
     hu = Lie.hom_index(vcat(zeros(Int, K-1),N))+1:Lie.hom_index(vcat(N,zeros(Int, K-1)))-1
@@ -217,7 +193,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
         for i=i1:i2
             @inbounds if h==hh[i]
                 if bch_specific && iseven(N) && p1[i]!=1
-                    cc[i]=0
+                    c[i]=0
                     continue
                 end
 
@@ -225,7 +201,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                     j1 = i
                 end
 
-                @inbounds w = WW[i]
+                @inbounds w = W[i]
 
                 kW = 1
                 @inbounds JW[1] = i
@@ -261,7 +237,7 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
                         @inbounds d = coeff(K, w, kB, N, JB[kB], p1, p2, nn, hh, H, WI, W2I, CT, M)
                         if !iszero(d)
                             for l=1:kB
-                                @inbounds cc[JW[l]] -= d*cc[JB[l]]
+                                @inbounds c[JW[l]] -= d*c[JB[l]]
                             end
                         end
                     end
@@ -269,6 +245,48 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
             end
         end
     end
+end
+
+
+
+function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
+               T::Type=Rational{Int}, verbose::Bool=false, M::Int=0,
+               lists_output::Bool=false, bch_specific::Bool=false)
+    t0 = time()
+    if verbose
+        print("initializing...")
+        flush(stdout)
+    end
+    K = length(G)
+    @assert K>=2 && allunique(G)
+
+    if bch_specific
+        K = 2
+        S = log(exp(G[1])*exp(G[2]))
+    end
+
+    M = min(M, N)
+
+    p1, p2, nn, W, ii, hh, CT, WI = init_lie(K, N, M)
+
+    if verbose
+        println("time=", time()-t0)
+        print("coeffs of words...")
+        flush(stdout)
+    end
+
+    c = coeffs_words(T(1), G, S, N, W, ii, p1, p2, bch_specific)
+
+    if verbose
+        println("time=", time()-t0)
+        print("coeffs of basis elements...")
+        flush(stdout)
+    end
+
+    den = lcm(denominator.(c))
+    cc = numerator.(den*c)
+
+    coeffs_basis_elements!(cc, K, N, W, ii, p1, p2, nn, hh, WI, CT, M, bch_specific)
 
     if verbose
        println("time=", time()-t0)
