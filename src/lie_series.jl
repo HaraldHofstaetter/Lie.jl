@@ -142,8 +142,8 @@ end
 
 
 function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int; 
-               denom::T, verbose::Bool=false, M::Int=0,
-               lists_output::Bool=false, bch_specific::Bool=false) where T<: Integer
+               denom::T=N<=16 ? Int(1) : Int128(1),
+               verbose::Bool=false, M::Int=0, lists_output::Bool=false, bch_specific::Bool=false) where T<: Integer
     t0 = time()
     if verbose
         print("initializing...")
@@ -155,6 +155,10 @@ function lie_series(G::Vector{Generator}, S::AlgebraElement, N::Int;
     if bch_specific
         K = 2
         S = log(exp(G[1])*exp(G[2]))
+    end
+
+    if isone(denom)
+        denom = factorial(T(N))*prod([p for p in [2,3,5,7,11,13,17,19] if p<=div(N,2)])
     end
 
     M = min(M, N)
