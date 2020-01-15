@@ -1,3 +1,41 @@
+# from https://mathoverflow.net/questions/99473/calculating-m%C3%B6bius-function
+# (answer by reuns)
+function moebius_mu(N)
+    mu = zeros(Int, N)
+    mu[1] = 1
+    for n = 1:div(N,2)
+        mu[2*n:n:end] .-= mu[n]
+    end
+    mu 
+end
+
+
+# Witt's formula:
+
+function number_of_lyndon_words(K::Integer, N::Int, N0::Int=N)
+    if N0>N
+        (N0, N) = (N, N0)
+    end
+    mu = moebius_mu(N)
+    nn = zeros(Int, N-N0+1)
+    for n=N0:N
+        d = 1
+        h = 0
+        while d^2 < n
+            (d1, r) = divrem(n, d)
+            if r==0
+               h += mu[d]*K^d1+mu[d1]*K^d
+            end
+            d += 1
+        end
+        if d^2 == n
+            h +=mu[d]*K^d
+        end
+        nn[n-N0+1] = div(h, n)
+    end
+    N==N0 ? nn[1] : nn
+end
+
 
 ########################################
 #Algorithm 2.1 from
