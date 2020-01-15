@@ -3,6 +3,8 @@
 #include<assert.h>
 #include<time.h>
 
+typedef  __int128_t INTEGER;
+
 
 static unsigned char **W;
 static unsigned int *p1;
@@ -10,6 +12,7 @@ static unsigned int *p2;
 static unsigned int *nn;
 static unsigned int *ii;
 static unsigned int n_lyndon;
+static INTEGER *FACTORIAL;
 
 
 
@@ -169,7 +172,7 @@ void genLW(unsigned int K, unsigned int n, unsigned int t, unsigned int p[],
 }
 
 
-void gen_lyndon_words(unsigned int K, unsigned int N) {
+void init_lyndon_words(unsigned int K, unsigned int N) {
     int nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
@@ -217,9 +220,24 @@ void gen_lyndon_words(unsigned int K, unsigned int N) {
     }
 }
 
+void init_factorial(unsigned int N) {
+    FACTORIAL = malloc((N+1)*sizeof(INTEGER)); /*TODO check for error */
+    FACTORIAL[0] = 1;
+    for (int n=1; n<=N; n++) {
+        FACTORIAL[n] = n*FACTORIAL[n-1];
+    }
+}
 
-enum expr_type { UNDEFINED, GENERATOR, SUM, PRODUCT, COMMUTATOR, TERM, 
-                 EXPONENTIAL, LOGARITHM };
+void init_all(unsigned int K, unsigned int N) {
+    init_factorial(N);
+    init_lyndon_words(K, N);
+}
+
+// TODO: free_factorial, free_lyndon_words, free_all, ...
+
+
+enum expr_type { UNDEFINED, IDENTITY, GENERATOR, SUM, DIFFERENCE, PRODUCT, 
+                 COMMUTATOR, TERM, EXPONENTIAL, LOGARITHM };
 
 typedef struct expr {
     enum expr_type type;
@@ -246,9 +264,23 @@ expr* generator(unsigned char n) {
     return g;
 }
 
+expr* identity(void) {
+    expr *g = undefined_expr();
+    g->type = IDENTITY;
+    return g;
+}
+
 expr* sum(expr* arg1, expr* arg2) {
     expr *g = undefined_expr();
     g->type = SUM;
+    g->arg1 = arg1;
+    g->arg2 = arg2;
+    return g;
+}
+
+expr* difference(expr* arg1, expr* arg2) {
+    expr *g = undefined_expr();
+    g->type = DIFFERENCE;
     g->arg1 = arg1;
     g->arg2 = arg2;
     return g;
@@ -293,6 +325,139 @@ expr* logarithm(expr* arg) {
     return g;
 }
 
+void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
+    switch (ex->type) {
+        case IDENTITY: 
+            for (int j=0; j<=n; j++) {
+                y[j] = v[j];
+            }
+            break;
+        case GENERATOR: 
+            for (int j=0; j<n; j++) {
+                if (w[j]==ex->num) {
+                    y[j] = v[j+1];
+                }
+                else {
+                    y[j] = 0;
+                }
+            }
+            y[n] = 0;
+            break;
+        case SUM: { 
+            INTEGER z[n+1];
+            phi(y, n, w, ex->arg1, v);
+            phi(z, n, w, ex->arg2, v);
+            for (int j=0; j<=n; j++) {
+                y[j] += z[j];
+            }
+            } 
+            break;
+        case DIFFERENCE: { 
+            INTEGER z[n+1];
+            phi(y, n, w, ex->arg1, v);
+            phi(z, n, w, ex->arg2, v);
+            for (int j=0; j<=n; j++) {
+                y[j] -= z[j];
+            }
+            } 
+            break;
+        case PRODUCT: 
+            phi(y, n, w, ex->arg2, v);
+            for (int j=0; j<=n; j++) {
+                if (y[j]==0) {
+                    return;
+                }
+            }
+            phi(y, n, w, ex->arg1, y);
+            break;
+        //case COMMUTATOR: 
+        //    break;
+        case TERM: 
+            phi(y, n, w, ex->arg1, v);
+            int p = ex->num;
+            int q = ex->den;
+            for (int j=1; j<=n; j++) {
+                INTEGER h = y[j]*p;
+                INTEGER d = h/q;
+                if (q*d!=h) {
+                    printf("dividend not divisble by %i\n", q);
+                    assert(0);
+                }
+                y[j] = d;
+            }
+            break; 
+        case EXPONENTIAL: {
+            INTEGER z[n+1];
+            for (int j=1; j<=n; j++) {
+                z[j] = v[j];
+                y[j] = v[j];                    
+            }
+            for (int k=1; k<=n; k++) {
+                phi(z, n ,w, ex->arg1, z);
+                for (int j=0; j<=n; j++) {
+                   if (z[j]==0) {
+                       return;
+                   }
+                } 
+                if (k<=20) {
+                    long int f = FACTORIAL[k]; /* fits into int => faster arithmetics */
+                    for (int j=0; j<=n; j++) {
+                        INTEGER d = z[j]/f;
+                        if (f*d!=z[j]) {
+                           printf("dividend not divisble by %i\n", f);
+                           assert(0);
+                        }
+                        y[j] += d;
+                    }
+                }
+                else {
+                    INTEGER f = FACTORIAL[k];
+                    for (int j=0; j<=n; j++) {
+                        INTEGER d = z[j]/f;
+                        if (f*d!=z[j]) {
+                           printf("dividend not divisble by %i\n", f);
+                           assert(0);
+                        }
+                        y[j] += d;
+                    }
+                }
+            }
+            }
+            break;
+        case LOGARITHM: {
+            INTEGER z[n+1];
+            expr* lm1 = difference(ex, identity());
+            for (int j=1; j<=n; j++) {
+                z[j] = v[j];
+                y[j] = v[j];                    
+            }
+            free(lm1);
+            for (int k=1; k<=n; k++) {
+                phi(z, n,  w, lm1->arg1, z);
+                for (int j=0; j<=n; j++) {
+                   if (z[j]==0) {
+                       return;
+                   }
+                }
+                int f = k * (k%2 ? +1 : -1); /* f = (-1)^(k+1)*k */ 
+                for (int j=0; j<=n; j++) {
+                    INTEGER d = z[j]/f;
+                    if (f*d!=z[j]) {
+                       printf("dividend not divisble by %i\n", f);
+                       assert(0);
+                    }
+                    y[j] += d;
+                }
+            }
+            free(lm1);
+            }
+            break;
+        default:
+            assert(0);
+    }
+}
+
+
 
 
 int main(void) {
@@ -313,7 +478,7 @@ int main(void) {
     }
 */
     clock_t t0 = clock();
-    gen_lyndon_words(K, N);
+    init_all(K, N);
     clock_t t = clock()-t0;
     printf("time for generating Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
 /*    
