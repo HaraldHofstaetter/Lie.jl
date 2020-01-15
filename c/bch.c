@@ -3,7 +3,8 @@
 #include<assert.h>
 #include<time.h>
 
-typedef  __int128_t INTEGER;
+/* typedef  __int128_t INTEGER; */
+typedef  __int64_t INTEGER;
 
 
 static unsigned char **W;
@@ -248,82 +249,144 @@ typedef struct expr {
 } expr;
 
 expr* undefined_expr(void) {
-    expr *g = malloc(sizeof(expr));
-    g->type = UNDEFINED;
-    g->arg1 = NULL;
-    g->arg2 = NULL;
-    g->num = 0;
-    g->den = 0;
-    return g;
+    expr *ex = malloc(sizeof(expr));
+    ex->type = UNDEFINED;
+    ex->arg1 = NULL;
+    ex->arg2 = NULL;
+    ex->num = 0;
+    ex->den = 0;
+    return ex;
 }
 
 expr* generator(unsigned char n) {
-    expr *g = undefined_expr();
-    g->type = GENERATOR;
-    g->num = n;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = GENERATOR;
+    ex->num = n;
+    return ex;
 }
 
 expr* identity(void) {
-    expr *g = undefined_expr();
-    g->type = IDENTITY;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = IDENTITY;
+    return ex;
 }
 
 expr* sum(expr* arg1, expr* arg2) {
-    expr *g = undefined_expr();
-    g->type = SUM;
-    g->arg1 = arg1;
-    g->arg2 = arg2;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = SUM;
+    ex->arg1 = arg1;
+    ex->arg2 = arg2;
+    return ex;
 }
 
 expr* difference(expr* arg1, expr* arg2) {
-    expr *g = undefined_expr();
-    g->type = DIFFERENCE;
-    g->arg1 = arg1;
-    g->arg2 = arg2;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = DIFFERENCE;
+    ex->arg1 = arg1;
+    ex->arg2 = arg2;
+    return ex;
 }
 
 expr* product(expr* arg1, expr* arg2) {
-    expr *g = undefined_expr();
-    g->type = PRODUCT;
-    g->arg1 = arg1;
-    g->arg2 = arg2;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = PRODUCT;
+    ex->arg1 = arg1;
+    ex->arg2 = arg2;
+    return ex;
 }
 
 expr* commutator(expr* arg1, expr* arg2) {
-    expr *g = undefined_expr();
-    g->type = COMMUTATOR;
-    g->arg1 = arg1;
-    g->arg2 = arg2;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = COMMUTATOR;
+    ex->arg1 = arg1;
+    ex->arg2 = arg2;
+    return ex;
 }
 
 expr* term(int num, int den, expr* arg) {
-    expr *g = undefined_expr();
-    g->type = TERM;
-    g->arg1 = arg;
-    g->num = num;
-    g->den = den;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = TERM;
+    ex->arg1 = arg;
+    ex->num = num;
+    ex->den = den;
+    return ex;
 }
 
 expr* exponential(expr* arg) {
-    expr *g = undefined_expr();
-    g->type = EXPONENTIAL;
-    g->arg1 = arg;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = EXPONENTIAL;
+    ex->arg1 = arg;
+    return ex;
 }
 
 expr* logarithm(expr* arg) {
-    expr *g = undefined_expr();
-    g->type = LOGARITHM;
-    g->arg1 = arg;
-    return g;
+    expr *ex = undefined_expr();
+    ex->type = LOGARITHM;
+    ex->arg1 = arg;
+    return ex;
 }
+
+void print_expr(expr* ex) {
+    switch(ex->type) {
+        case IDENTITY:
+            printf("Id");
+            break;
+        case GENERATOR: 
+            printf("%c", 'A'+ex->num);
+            break;
+        case SUM:
+            printf("(");
+            print_expr(ex->arg1);
+            printf("+");
+            print_expr(ex->arg2);
+            printf(")");
+            break;
+        case DIFFERENCE:
+            printf("(");
+            print_expr(ex->arg1);
+            printf("-");
+            print_expr(ex->arg2);
+            printf(")");
+            break;
+        case PRODUCT: 
+            print_expr(ex->arg1);
+            printf("*");
+            print_expr(ex->arg2);
+            break;
+        case COMMUTATOR: 
+            printf("[");
+            print_expr(ex->arg1);
+            printf(",");
+            print_expr(ex->arg2);
+            printf("]");
+            break;
+        case TERM: 
+            break;
+        case EXPONENTIAL:
+            printf("exp(");
+            print_expr(ex->arg1);
+            printf(")");
+            break;
+        case LOGARITHM: 
+            printf("log(");
+            print_expr(ex->arg1);
+            printf(")");
+            break;
+        default:
+            printf("unknown expr type %i\n", ex->type);
+            assert(0);
+    }
+}
+
+int iszero(INTEGER v[], size_t n) {
+    for (int j=0; j<n; j++) {
+        if (v[j]!=0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 
 void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
     switch (ex->type) {
@@ -352,7 +415,7 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
             }
             } 
             break;
-        case DIFFERENCE: { 
+        case DIFFERENCE: {
             INTEGER z[n+1];
             phi(y, n, w, ex->arg1, v);
             phi(z, n, w, ex->arg2, v);
@@ -362,11 +425,12 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
             } 
             break;
         case PRODUCT: 
+            if (iszero(v, n+1)) {
+                return;
+            }
             phi(y, n, w, ex->arg2, v);
-            for (int j=0; j<=n; j++) {
-                if (y[j]==0) {
-                    return;
-                }
+            if (iszero(y, n+1)) {
+                return;
             }
             phi(y, n, w, ex->arg1, y);
             break;
@@ -388,23 +452,21 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
             break; 
         case EXPONENTIAL: {
             INTEGER z[n+1];
-            for (int j=1; j<=n; j++) {
+            for (int j=0; j<=n; j++) {
                 z[j] = v[j];
                 y[j] = v[j];                    
             }
             for (int k=1; k<=n; k++) {
-                phi(z, n ,w, ex->arg1, z);
-                for (int j=0; j<=n; j++) {
-                   if (z[j]==0) {
-                       return;
-                   }
-                } 
+                phi(z, n, w, ex->arg1, z);
+                if (iszero(z, n+1)) {
+                   return;
+                }
                 if (k<=20) {
                     long int f = FACTORIAL[k]; /* fits into int => faster arithmetics */
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
                         if (f*d!=z[j]) {
-                           printf("dividend not divisble by %i\n", f);
+                           printf("dividend not divisble by %li\n", f);
                            assert(0);
                         }
                         y[j] += d;
@@ -415,7 +477,7 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
                         if (f*d!=z[j]) {
-                           printf("dividend not divisble by %i\n", f);
+                           printf("dividend not divisble by %li\n", f);
                            assert(0);
                         }
                         y[j] += d;
@@ -425,21 +487,18 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
             }
             break;
         case LOGARITHM: {
+            expr* lm1 = difference(ex->arg1, identity());
             INTEGER z[n+1];
-            expr* lm1 = difference(ex, identity());
-            for (int j=1; j<=n; j++) {
+            for (int j=0; j<=n; j++) {
                 z[j] = v[j];
                 y[j] = v[j];                    
             }
-            free(lm1);
             for (int k=1; k<=n; k++) {
-                phi(z, n,  w, lm1->arg1, z);
-                for (int j=0; j<=n; j++) {
-                   if (z[j]==0) {
-                       return;
-                   }
+                phi(z, n, w, lm1, z);
+                if (iszero(z, n+1)) {
+                   return;
                 }
-                int f = k * (k%2 ? +1 : -1); /* f = (-1)^(k+1)*k */ 
+                int f = (k%2 ? +1 : -1)*k; /* f = (-1)^(k+1)*k */ 
                 for (int j=0; j<=n; j++) {
                     INTEGER d = z[j]/f;
                     if (f*d!=z[j]) {
@@ -449,10 +508,12 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
                     y[j] += d;
                 }
             }
+            free(lm1->arg2);
             free(lm1);
             }
             break;
         default:
+            printf("unknown expr type %i\n", ex->type);
             assert(0);
     }
 }
@@ -461,7 +522,7 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
 
 
 int main(void) {
-    const unsigned N=20;
+    const unsigned N=5;
     const unsigned K=2;
 /*
     int mu[N];
@@ -477,24 +538,52 @@ int main(void) {
         printf("number of lyndon words of length %i = %i\n", i+1, nLW[i]);
     }
 */
-    clock_t t0 = clock();
+    clock_t t = clock();
     init_all(K, N);
-    clock_t t = clock()-t0;
+    t = clock()-t;
     printf("time for generating Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
 /*    
     for (int i=0; i<=N; i++) {
         printf("ii[%i] = %i\n", i, ii[i]);
     }
   
-    for (int i=0; i<ii[N]; i++) {
-        printf("%8i %5i %8i %8i  ", i, nn[i], p1[i], p2[i]);
-        print_word(nn[i], W[i]);
-        printf("\n");
-    }
  */
     expr *A = generator(0);
     expr *B = generator(1);
-    expr *BCH = logarithm(sum(exponential(A), exponential(B)));
+    expr *BCH = logarithm(product(exponential(A), exponential(B)));
+    //expr *BCH = difference(product(exponential(A), exponential(B)),identity());
+    // expr *BCH = difference(product(A,product(B,product(product(A, B),B))), product(A,sum(A,B)));
+    //
+    
+    printf("S=");
+    print_expr(BCH);
+    printf("\n");
+
+    INTEGER denom = FACTORIAL[N]*2*3;
+    //INTEGER denom = 1;
+
+    INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+    INTEGER y[N+1];
+    INTEGER e[N+1];
+
+    t = clock();
+    for (int n=0; n<n_lyndon; n++) {
+        for (int j=0; j<=nn[n]; j++) {
+            e[j] = 0;
+        }
+        e[nn[n]] = denom;
+        phi(y, nn[n], W[n], BCH, e);
+        c[n] = y[0]; 
+    }
+    t = clock()-t;
+    printf("time for coeffs of Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
+
+    for (int n=0; n<n_lyndon; n++) {
+        printf("%8i    ", n);
+        print_word(nn[n], W[n]);
+        printf(" %8li/%li\n", c[n], denom);
+    }
+
 
     return EXIT_SUCCESS ;
 }
