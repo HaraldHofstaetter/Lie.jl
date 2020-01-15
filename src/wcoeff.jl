@@ -218,6 +218,22 @@ end
 
 #for pure Integer arithmetic:
 
+function phi!(y::Vector{T}, w::Word, t::Term, v::Vector{T}) where T<:Integer
+    phi!(y, w, t.e, v)
+    if isa(t.c, Rational)
+        p = numerator(t.c)
+        q = denominator(t.c)
+        for i=1:length(w)+1
+            @inbounds h = y[i]*p
+            @inbounds (d, r) = divrem(h, q)
+            @assert iszero(r) "$(h) not divisible by $q"
+            @inbounds y[i] = d
+        end
+    else
+        y[:] *= t.c
+    end
+end
+
 function phi!(y::Vector{T}, w::Word, e::Exponential, v::Vector{T}) where T<:Integer
     z = copy(v)
     copyto!(y, v)
