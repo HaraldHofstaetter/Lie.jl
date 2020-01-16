@@ -1,4 +1,5 @@
 #include<stdlib.h>
+#include<stdint.h>
 #include<stdio.h>
 #include<assert.h>
 #include<time.h>
@@ -10,17 +11,17 @@ typedef  __int64_t INTEGER;
 #endif
 
 
-static unsigned char **W;
-static unsigned int *p1;
-static unsigned int *p2;
-static unsigned int *nn;
-static unsigned int *ii;
-static unsigned int n_lyndon;
+static uint8_t **W;
+static size_t *p1;
+static size_t *p2;
+static size_t *nn;
+static size_t *ii;
+static size_t n_lyndon;
 static INTEGER *FACTORIAL;
 
 
 
-void moebius_mu(unsigned int N, int mu[N]) {
+void moebius_mu(size_t N, int mu[N]) {
     /* INPUT: N
      * OUTPUT: mu[n] = Moebius mu function of n+1, n=0,...,N-1
      * METHOD: see https://mathoverflow.net/questions/99473/calculating-m%C3%B6bius-function
@@ -37,13 +38,13 @@ void moebius_mu(unsigned int N, int mu[N]) {
     }
 }
 
-void number_of_lyndon_words(unsigned int K, unsigned int N, int nLW[N]) {
+void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
     /* INPUT: K ... number of letters
      *        N ... maximum lenght of lyndon words
      * OUTPUT: nLW[n] ... number of lyndon words with K letters of length n+1, n=0,...,N-1
      * METHOD: Witt's formula
      */
-    int powK[N+1];
+    unsigned int powK[N+1];
     powK[0] = 1;
     for (int i=1; i<=N; i++) {
         powK[i] = powK[i-1]*K;
@@ -70,14 +71,17 @@ void number_of_lyndon_words(unsigned int K, unsigned int N, int nLW[N]) {
     }
 }
 
-void print_word(unsigned int n, unsigned char w[]) {        
+void print_word(size_t n, uint8_t w[]) {        
     for (int j=0; j<n; j++) {
            printf("%i", w[j]);
     }
 }
 
-int compare_words(unsigned int n1, unsigned char w1[],
-                  unsigned int n2, unsigned char w2[]) {
+//size_t word_index(size_t K, size_t n, uint8_t w[],
+//                  size_t l, size_t r)
+
+int compare_words(size_t n1, uint8_t w1[],
+                  size_t n2, uint8_t w2[]) {
     if (n1<n2) {
         return -1;
     }
@@ -95,9 +99,9 @@ int compare_words(unsigned int n1, unsigned char w1[],
     return 0;
 }
 
-unsigned int find_lyndon_word(unsigned int l, unsigned int r, unsigned int n, unsigned char w[]) {
+size_t find_lyndon_word(size_t l, size_t r, size_t n, uint8_t w[]) {
     while (l<=r) {
-        unsigned int m = l + (r-l)/2;
+        size_t m = l + (r-l)/2;
         int s = compare_words(nn[m], W[m], n, w);
         if (s==0) {
             return m;
@@ -129,15 +133,15 @@ unsigned int find_lyndon_word(unsigned int l, unsigned int r, unsigned int n, un
  * J. Algorithms 37 (2) (2000) 267–282
  */
 
-void genLW(unsigned int K, unsigned int n, unsigned int t, unsigned int p[], 
-           unsigned char a[], size_t *wp, unsigned int split[]) {
+void genLW(uint8_t K, size_t n, size_t t, size_t p[], 
+           uint8_t a[], size_t *wp, size_t split[]) {
     if (t>n) {
         if (p[0]==n) {
             for (int i=0; i<n; i++) {
                 W[*wp][i] = a[i+1];
             }
             if (n>1) {
-                unsigned int m = split[(n-1)*n]; /* split[1,n] */
+                size_t m = split[(n-1)*n]; /* split[1,n] */
                 p1[*wp] = find_lyndon_word(0, *wp-1, m-1, W[*wp]);
                 p2[*wp] = find_lyndon_word(0, *wp-1, n-m+1, W[*wp]+m-1);
             }
@@ -145,7 +149,7 @@ void genLW(unsigned int K, unsigned int n, unsigned int t, unsigned int p[],
         }
     }
     else {
-        unsigned int q[n];
+        size_t q[n];
         for (int i=0; i<n; i++) {
             q[i] = p[i];
         }
@@ -176,8 +180,8 @@ void genLW(unsigned int K, unsigned int n, unsigned int t, unsigned int p[],
 }
 
 
-void init_lyndon_words(unsigned int K, unsigned int N) {
-    int nLW[N];
+void init_lyndon_words(uint8_t K, size_t N) {
+    size_t nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
     n_lyndon = 0; /* global variable */
@@ -185,12 +189,12 @@ void init_lyndon_words(unsigned int K, unsigned int N) {
         n_lyndon += nLW[n-1];
         mem_len += n*nLW[n-1];
     }
-    W = malloc(n_lyndon*sizeof(unsigned char *)); /*TODO check for error */
-    p1 = malloc(n_lyndon*sizeof(unsigned int)); /*TODO check for error */
-    p2 = malloc(n_lyndon*sizeof(unsigned int)); /*TODO check for error */
-    nn = malloc(n_lyndon*sizeof(unsigned int)); /*TODO check for error */
-    ii = malloc((N+1)*sizeof(unsigned int)); /*TODO check for error */
-    W[0] = malloc(mem_len*sizeof(unsigned char)); /*TODO check for error */ 
+    W = malloc(n_lyndon*sizeof(uint8_t *)); /*TODO check for error */
+    p1 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
+    p2 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
+    nn = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
+    ii = malloc((N+1)*sizeof(size_t)); /*TODO check for error */
+    W[0] = malloc(mem_len*sizeof(uint8_t)); /*TODO check for error */ 
     ii[0] = 0;
     int m=0;
     for (int n=1; n<=N; n++) {
@@ -206,9 +210,9 @@ void init_lyndon_words(unsigned int K, unsigned int N) {
         p2[i]=0;
     }
 
-    unsigned char a[N+1];
-    unsigned int p[N];
-    unsigned int split[N*N];
+    uint8_t a[N+1];
+    size_t p[N];
+    size_t split[N*N];
     size_t wp = 0;
     for (int n=1; n<=N; n++) {
         for (int i=0; i<=n; i++) {
@@ -225,7 +229,7 @@ void init_lyndon_words(unsigned int K, unsigned int N) {
     assert(wp==n_lyndon);
 }
 
-void init_factorial(unsigned int N) {
+void init_factorial(size_t N) {
     FACTORIAL = malloc((N+1)*sizeof(INTEGER)); /*TODO check for error */
     FACTORIAL[0] = 1;
     for (int n=1; n<=N; n++) {
@@ -233,7 +237,7 @@ void init_factorial(unsigned int N) {
     }
 }
 
-void init_all(unsigned int K, unsigned int N) {
+void init_all(uint8_t K, size_t N) {
     init_factorial(N);
     init_lyndon_words(K, N);
 }
@@ -262,7 +266,7 @@ expr* undefined_expr(void) {
     return ex;
 }
 
-expr* generator(unsigned char n) {
+expr* generator(uint8_t n) {
     expr *ex = undefined_expr();
     ex->type = GENERATOR;
     ex->num = n;
@@ -392,7 +396,7 @@ int iszero(INTEGER v[], size_t n) {
 }
 
 
-void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
+void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
     switch (ex->type) {
         case IDENTITY: 
             for (int j=0; j<=n; j++) {
@@ -539,8 +543,8 @@ INTEGER gcd(INTEGER a, INTEGER b) {
 
 
 int main(void) {
-    const unsigned N=20;
-    const unsigned K=2;
+    const size_t N = 5;
+    const uint8_t K = 2;
 
     struct timespec t0, t1;
     double t;
@@ -561,7 +565,7 @@ int main(void) {
     print_expr(BCH);
     printf("\n");
 
-    INTEGER denom = FACTORIAL[N]*2*3*5*7;
+    INTEGER denom = FACTORIAL[N]*2*3; // *5*7;
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
 
@@ -587,14 +591,12 @@ int main(void) {
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
     printf("time for coeffs of Lyndon words: t=%g\n", t);
 
-    /*
     for (int n=0; n<n_lyndon; n++) {
         printf("%8i    ", n);
         print_word(nn[n], W[n]);
         INTEGER d = gcd(c[n], denom);
         printf(" %8li/%li\n", c[n]/d, denom/d);
     }
-    */
 
     return EXIT_SUCCESS ;
 }
