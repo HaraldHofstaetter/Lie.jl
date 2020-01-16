@@ -3,8 +3,11 @@
 #include<assert.h>
 #include<time.h>
 
-/* typedef  __int128_t INTEGER; */
+#ifdef USE_INT128_T
+typedef  __int128_t INTEGER; 
+#else
 typedef  __int64_t INTEGER;
+#endif
 
 
 static unsigned char **W;
@@ -219,6 +222,7 @@ void init_lyndon_words(unsigned int K, unsigned int N) {
         }
         genLW(K, n, 1, p, a, &wp, split);
     }
+    assert(wp==n_lyndon);
 }
 
 void init_factorial(unsigned int N) {
@@ -407,20 +411,22 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
             y[n] = 0;
             break;
         case SUM: { 
-            INTEGER z[n+1];
-            phi(y, n, w, ex->arg1, v);
-            phi(z, n, w, ex->arg2, v);
+            INTEGER y1[n+1];
+            INTEGER y2[n+1];
+            phi(y1, n, w, ex->arg1, v);
+            phi(y2, n, w, ex->arg2, v);
             for (int j=0; j<=n; j++) {
-                y[j] += z[j];
+                y[j] = y1[j] + y2[j];
             }
             } 
             break;
         case DIFFERENCE: {
-            INTEGER z[n+1];
-            phi(y, n, w, ex->arg1, v);
-            phi(z, n, w, ex->arg2, v);
+            INTEGER y1[n+1];
+            INTEGER y2[n+1];
+            phi(y1, n, w, ex->arg1, v);
+            phi(y2, n, w, ex->arg2, v);
             for (int j=0; j<=n; j++) {
-                y[j] -= z[j];
+                y[j] = y1[j]-y2[j];
             }
             } 
             break;
@@ -519,48 +525,38 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
 }
 
 
+INTEGER gcd(INTEGER a, INTEGER b) {
+    while (b!=0) {
+       INTEGER t = b; 
+       b = a%b; 
+       a = t; 
+    }
+    return abs(a);
+}
+
+
+
+
 
 
 int main(void) {
     const unsigned N=5;
     const unsigned K=2;
-/*
-    int mu[N];
-    moebius_mu(N, mu);
-    for (int i=0; i<N; i++) {
-        printf("mu(%i) = %i\n", i+1, mu[i]);
-    }
 
-    
-    int nLW[N];
-    number_of_lyndon_words(K, N, nLW);
-    for (int i=0; i<N; i++) {
-        printf("number of lyndon words of length %i = %i\n", i+1, nLW[i]);
-    }
-*/
     clock_t t = clock();
     init_all(K, N);
     t = clock()-t;
     printf("time for generating Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
-/*    
-    for (int i=0; i<=N; i++) {
-        printf("ii[%i] = %i\n", i, ii[i]);
-    }
-  
- */
+
     expr *A = generator(0);
     expr *B = generator(1);
     expr *BCH = logarithm(product(exponential(A), exponential(B)));
-    //expr *BCH = difference(product(exponential(A), exponential(B)),identity());
-    // expr *BCH = difference(product(A,product(B,product(product(A, B),B))), product(A,sum(A,B)));
-    //
     
     printf("S=");
     print_expr(BCH);
     printf("\n");
 
     INTEGER denom = FACTORIAL[N]*2*3;
-    //INTEGER denom = 1;
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
     INTEGER y[N+1];
@@ -581,9 +577,9 @@ int main(void) {
     for (int n=0; n<n_lyndon; n++) {
         printf("%8i    ", n);
         print_word(nn[n], W[n]);
-        printf(" %8li/%li\n", c[n], denom);
+        INTEGER d = gcd(c[n], denom);
+        printf(" %8li/%li\n", c[n]/d, denom/d);
     }
-
 
     return EXIT_SUCCESS ;
 }
