@@ -5,9 +5,9 @@
 #include<time.h>
 
 #ifdef USE_INT128_T
-typedef  __int128_t INTEGER; 
+typedef __int128_t INTEGER; 
 #else
-typedef  __int64_t INTEGER;
+typedef __int64_t INTEGER;
 #endif
 
 
@@ -16,9 +16,10 @@ static size_t *p1;
 static size_t *p2;
 static size_t *nn;
 static size_t *ii;
+static size_t *LWI;
+static size_t *MDI;
 static size_t n_lyndon;
 static INTEGER *FACTORIAL;
-
 
 
 void moebius_mu(size_t N, int mu[N]) {
@@ -77,47 +78,84 @@ void print_word(size_t n, uint8_t w[]) {
     }
 }
 
-//size_t word_index(size_t K, size_t n, uint8_t w[],
-//                  size_t l, size_t r)
-
-int compare_words(size_t n1, uint8_t w1[],
-                  size_t n2, uint8_t w2[]) {
-    if (n1<n2) {
-        return -1;
+size_t word_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
+    size_t x = w[r];
+    size_t y = K;
+    for (int j=r-1; j>=l; j--) {
+        x += w[j]*y;
+        y *= K;
     }
-    else if (n1>n2) {
-        return +1;
-    }
-    for (int j=0; j<n1; j++) {
-        if (w1[j]<w2[j]) {
-            return -1;
-        }
-        else if (w1[j]>w2[j]) {
-            return +1;
-        }
-    }
-    return 0;
+    return x + (y-1)/(K-1) - 1;
 }
 
-size_t find_lyndon_word(size_t l, size_t r, size_t n, uint8_t w[]) {
+size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
     while (l<=r) {
         size_t m = l + (r-l)/2;
-        int s = compare_words(nn[m], W[m], n, w);
-        if (s==0) {
+        if (LWI[m]==wi) {
             return m;
         }
-        if (s<0) {
+        if (LWI[m]<wi) {
             l = m+1;
         }
         else {
             r = m-1;
         }
     }
-    printf("NOT FOUND: ");
-    print_word(n, w);
-    printf("\n");
+    fprintf(stderr, "LYNDON WORD INDEX NOT FOUND: %li\n", wi);
     assert(0); /* should not reach this point, otherwise word not found */ 
 }
+
+unsigned int binomial(unsigned int n, unsigned int k) {
+    /* METHOD: from Julia base library, see
+     * https://github.com/JuliaLang/julia/blob/master/base/intfuncs.jl     
+     */ 
+
+    if (k < 0 || k > n ) {
+        return 0;
+    }
+    if (k == 0 || k == n) {
+        return 1;
+    }
+    if (k == 1) {
+        return n;
+    }
+    if (k > (n>>1)) {
+        k = (n - k);
+    }
+    uint64_t x = n - k +1;
+    uint64_t nn = x;
+    nn += 1;
+    uint64_t rr = 2;
+    while (rr <= k) {
+        x = (x*nn) / rr;  /* TODO:  handle possible overflow 
+                             (cannot occur with reasonable parameters for BCH) */
+        rr += 1;
+        nn += 1;
+    }
+    return x;
+}
+
+size_t hom_index(size_t K, size_t x[]) {
+    size_t i = 0;
+    size_t n = 0;
+    for (int k=0; k<K; k++) {
+        n += x[K-k-1];
+        i += binomial(k+n, n-1);
+    }
+    return i;
+}
+
+size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
+    size_t h[K];
+    for (int j=0; j<K; j++) {
+        h[j] = 0;
+    }
+    for (int j=l; j<=r; j++) {
+        h[w[j]] += 1;
+    }
+    return hom_index(K, h);
+}
+
 
 
 /* The following two functions are for the generation of Lyndon words
@@ -140,10 +178,14 @@ void genLW(uint8_t K, size_t n, size_t t, size_t p[],
             for (int i=0; i<n; i++) {
                 W[*wp][i] = a[i+1];
             }
+            LWI[*wp] = word_index(K, a, 1, n);
+            MDI[*wp] = multi_degree_index(K, a, 1, n);
             if (n>1) {
                 size_t m = split[(n-1)*n]; /* split[1,n] */
-                p1[*wp] = find_lyndon_word(0, *wp-1, m-1, W[*wp]);
-                p2[*wp] = find_lyndon_word(0, *wp-1, n-m+1, W[*wp]+m-1);
+                size_t wi1 = word_index(K, a, 1, m-1);
+                size_t wi2 = word_index(K, a, m, n);
+                p1[*wp] = find_lyndon_word_index(0, *wp-1, wi1);
+                p2[*wp] = find_lyndon_word_index(0, *wp-1, wi2);
             }
             (*wp)++;
         }
@@ -193,6 +235,8 @@ void init_lyndon_words(uint8_t K, size_t N) {
     p1 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
     p2 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
     nn = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
+    LWI = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
+    MDI = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
     ii = malloc((N+1)*sizeof(size_t)); /*TODO check for error */
     W[0] = malloc(mem_len*sizeof(uint8_t)); /*TODO check for error */ 
     ii[0] = 0;
@@ -235,11 +279,6 @@ void init_factorial(size_t N) {
     for (int n=1; n<=N; n++) {
         FACTORIAL[n] = n*FACTORIAL[n-1];
     }
-}
-
-void init_all(uint8_t K, size_t N) {
-    init_factorial(N);
-    init_lyndon_words(K, N);
 }
 
 // TODO: free_factorial, free_lyndon_words, free_all, ...
@@ -381,7 +420,7 @@ void print_expr(expr* ex) {
             printf(")");
             break;
         default:
-            printf("unknown expr type %i\n", ex->type);
+            fprintf(stderr, "unknown expr type %i\n", ex->type);
             assert(0);
     }
 }
@@ -454,7 +493,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                 INTEGER h = y[j]*p;
                 INTEGER d = h/q;
                 if (q*d!=h) {
-                    printf("dividend not divisble by %i\n", q);
+                    fprintf(stderr, "dividend not divisble by %i\n", q);
                     assert(0);
                 }
                 y[j] = d;
@@ -476,7 +515,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
                         if (f*d!=z[j]) {
-                           printf("dividend not divisble by %li\n", f);
+                           fprintf(stderr, "dividend not divisble by %li\n", f);
                            assert(0);
                         }
                         y[j] += d;
@@ -487,7 +526,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
                         if (f*d!=z[j]) {
-                           printf("dividend not divisble by %li\n", f);
+                           fprintf(stderr, "dividend not divisble by %li\n", f);
                            assert(0);
                         }
                         y[j] += d;
@@ -512,7 +551,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                 for (int j=0; j<=n; j++) {
                     INTEGER d = z[j]/f;
                     if (f*d!=z[j]) {
-                       printf("dividend not divisble by %i\n", f);
+                       fprintf(stderr, "dividend not divisble by %i\n", f);
                        assert(0);
                     }
                     y[j] += d;
@@ -523,10 +562,44 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             }
             break;
         default:
-            printf("unknown expr type %i\n", ex->type);
+            fprintf(stderr, "unknown expr type %i\n", ex->type);
             assert(0);
     }
 }
+
+int coeff(uint8_t K, uint8_t w[], size_t l, size_t r, size_t j,
+          size_t H[], size_t W2I[]) { //, size_t CT[], size_t M) {
+    if (l==r) {
+        return w[l]==j ? 1 : 0;
+    }
+
+    size_t n = r-l+1;
+    if ((H[l+r*n] != MDI[j]) || (W2I[l+r*n] < LWI[j])) {
+        return 0;
+    }
+    if (W2I[l+r*n] == LWI[j]) {
+        return 1;
+    }
+
+    size_t j1 = p1[j];
+    size_t j2 = p1[j];
+    size_t m1 = nn[j1];
+    size_t m2 = nn[j2];
+
+    int c2 = coeff(K, w, l+m2, r, j1, H, W2I);
+    if (c2!=0) {
+        c2 *= coeff(K, w, l, l+m2-1, j2, H, W2I);
+    }
+
+    int c1 = coeff(K, w, l+m1, r, j2, H, W2I);
+    if (c1!=0) {
+        c1 *= coeff(K, w, l, l+m1-1, j1, H, W2I);
+    }
+
+    return c1 - c2;
+}
+
+
 
 INTEGER gcd(INTEGER a, INTEGER b) {
     while (b!=0) {
@@ -538,6 +611,10 @@ INTEGER gcd(INTEGER a, INTEGER b) {
 }
 
 
+void init_all(uint8_t K, size_t N) {
+    init_factorial(N);
+    init_lyndon_words(K, N);
+}
 
 
 
@@ -545,6 +622,7 @@ INTEGER gcd(INTEGER a, INTEGER b) {
 int main(void) {
     const size_t N = 5;
     const uint8_t K = 2;
+
 
     struct timespec t0, t1;
     double t;
@@ -555,7 +633,7 @@ int main(void) {
 
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
-    printf("time for generating Lyndon words: t=%g\n", t );
+    printf("initialization: time=%g seconds\n", t );
 
     expr *A = generator(0);
     expr *B = generator(1);
@@ -589,10 +667,10 @@ int main(void) {
 
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
-    printf("time for coeffs of Lyndon words: t=%g\n", t);
+    printf("coeffs of Lyndon words: time=%g seconds\n", t);
 
     for (int n=0; n<n_lyndon; n++) {
-        printf("%8i    ", n);
+        printf("%8i  %8li  %8li    ", n, LWI[n], MDI[n]);
         print_word(nn[n], W[n]);
         INTEGER d = gcd(c[n], denom);
         printf(" %8li/%li\n", c[n]/d, denom/d);
