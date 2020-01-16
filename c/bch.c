@@ -21,6 +21,9 @@ static size_t *MDI;
 static size_t n_lyndon;
 static INTEGER *FACTORIAL;
 
+static size_t lookup_size;
+int *LUT;
+
 
 void moebius_mu(size_t N, int mu[N]) {
     /* INPUT: N
@@ -63,7 +66,7 @@ void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
                int d1 = d1r.quot; 
                h += mu[d-1]*powK[d1]+mu[d1-1]*powK[d];
             }
-            d += 1;
+            d++;
         }
         if (d*d == n) {
             h += mu[d-1]*powK[d];
@@ -79,9 +82,11 @@ void print_word(size_t n, uint8_t w[]) {
 }
 
 size_t word_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
-    size_t x = w[r];
-    size_t y = K;
-    for (int j=r-1; j>=l; j--) {
+    //size_t x = w[r];
+    //size_t y = K;
+    size_t x = 0;
+    size_t y = 1;
+    for (int j=r; j>= (signed) l; j--) { /* CAUTION! comparison between signed and unsigned */
         x += w[j]*y;
         y *= K;
     }
@@ -109,7 +114,6 @@ unsigned int binomial(unsigned int n, unsigned int k) {
     /* METHOD: from Julia base library, see
      * https://github.com/JuliaLang/julia/blob/master/base/intfuncs.jl     
      */ 
-
     if (k < 0 || k > n ) {
         return 0;
     }
@@ -124,13 +128,13 @@ unsigned int binomial(unsigned int n, unsigned int k) {
     }
     uint64_t x = n - k +1;
     uint64_t nn = x;
-    nn += 1;
+    nn++;
     uint64_t rr = 2;
     while (rr <= k) {
         x = (x*nn) / rr;  /* TODO:  handle possible overflow 
                              (cannot occur with reasonable parameters for BCH) */
-        rr += 1;
-        nn += 1;
+        rr++;
+        nn++;
     }
     return x;
 }
@@ -151,7 +155,7 @@ size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
         h[j] = 0;
     }
     for (int j=l; j<=r; j++) {
-        h[w[j]] += 1;
+        h[w[j]]++;
     }
     return hom_index(K, h);
 }
@@ -567,36 +571,136 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
     }
 }
 
-int coeff(uint8_t K, uint8_t w[], size_t l, size_t r, size_t j,
-          size_t H[], size_t W2I[]) { //, size_t CT[], size_t M) {
+void init_lookup_table(uint8_t K, size_t M) {
+    lookup_size = M;
+    // TODO ...
+}
+
+
+int coeff_word_in_basis_element(uint8_t K, uint8_t w[], size_t l, size_t r, 
+           size_t j, size_t H[], size_t W2I[], size_t N) { //, size_t CT[], size_t M) {
     if (l==r) {
         return w[l]==j ? 1 : 0;
     }
 
-    size_t n = r-l+1;
-    if ((H[l+r*n] != MDI[j]) || (W2I[l+r*n] < LWI[j])) {
+    if ((H[l+r*N] != MDI[j]) || (W2I[l+r*N] < LWI[j])) {
         return 0;
     }
-    if (W2I[l+r*n] == LWI[j]) {
+    if (W2I[l+r*N] == LWI[j]) {
         return 1;
     }
 
     size_t j1 = p1[j];
-    size_t j2 = p1[j];
+    size_t j2 = p2[j];
     size_t m1 = nn[j1];
     size_t m2 = nn[j2];
 
-    int c2 = coeff(K, w, l+m2, r, j1, H, W2I);
+    int c2 = coeff_word_in_basis_element(K, w, l+m2, r, j1, H, W2I, N);
     if (c2!=0) {
-        c2 *= coeff(K, w, l, l+m2-1, j2, H, W2I);
+        c2 *= coeff_word_in_basis_element(K, w, l, l+m2-1, j2, H, W2I, N);
     }
 
-    int c1 = coeff(K, w, l+m1, r, j2, H, W2I);
+    int c1 = coeff_word_in_basis_element(K, w, l+m1, r, j2, H, W2I, N);
     if (c1!=0) {
-        c1 *= coeff(K, w, l, l+m1-1, j1, H, W2I);
+        c1 *= coeff_word_in_basis_element(K, w, l, l+m1-1, j1, H, W2I, N);
     }
 
     return c1 - c2;
+}
+
+
+void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
+    INTEGER e[N+1];
+
+    /* c[0] needs special handling */
+    INTEGER t1[2];
+    e[0] = 0;
+    e[1] = denom;
+    phi(t1, 1, W[0], ex, e);
+    c[0] = t1[0];
+
+    /* now the other coeffs */
+    for (int j=0; j<N; j++){
+        e[j] = 0;
+    }
+    e[N] = denom;
+
+    size_t i1 = ii[N-1];
+    size_t i2 = ii[N]-1;
+
+    size_t h1 = MDI[i1];
+    size_t h2 = MDI[i2];
+
+    #pragma omp parallel 
+    {
+    size_t H[N*N];
+    size_t W2I[N*N];
+    
+    for(int l=0; l<=N*N; l++) {
+        H[l] = 0;
+        W2I[l] = 0;
+    }
+
+    size_t JW[N];
+    size_t JB[N];
+    INTEGER t[N+1];
+
+    #pragma omp for
+     //for (int h=h1; h<=h2; h++) {
+     for (int h=h2; h>=h1; h--) {
+        size_t j1 = 0;
+        for (int i=i1; i<=i2; i++) {
+            if (MDI[i]==h) {
+                if (bch_specific && !(N%2) && p1[i]!=0) {
+                    c[i] = 0;
+                    continue;
+                }
+                if (j1==0) {
+                    j1 = i;
+                }
+
+                uint8_t *w = W[i];
+                phi(t, N, w, ex, e);
+                c[i] = t[0];
+
+                size_t kW = 0;
+                JW[0] = i;
+                size_t l = i;
+                while (p1[l]==0) {
+                    kW++;
+                    l = p2[l];
+                    JW[kW] = l;
+                    c[l] = t[kW];
+                }
+                for (int l=0; l<N; l++) {
+                    for (int r=l; r<N; r++) {
+                        H[l + r*N] = multi_degree_index(K, w, l, r); 
+                        W2I[l + r*N] = word_index(K, w, l, r); 
+                    }
+                }
+
+                for (int j=j1; j<=i-1; j++) {
+                    if (MDI[j]==h) {
+                        size_t kB = 0;
+                        JB[0] = j;
+                        size_t l = j;
+                        while ((kB<kW) && (p1[l]==0)) {
+                            kB++;
+                            l = p2[l];
+                            JB[kB] = l;
+                        }
+                        INTEGER d = coeff_word_in_basis_element(K, w, kB, N-1, JB[kB], H, W2I, N); //, CT, M)
+                        if (d!=0) {
+                            for (int l=0; l<=kB; l++) {
+                                c[JW[l]] -= d*c[JB[l]];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
 }
 
 
@@ -620,7 +724,7 @@ void init_all(uint8_t K, size_t N) {
 
 
 int main(void) {
-    const size_t N = 5;
+    const size_t N = 12;
     const uint8_t K = 2;
 
 
@@ -643,12 +747,14 @@ int main(void) {
     print_expr(BCH);
     printf("\n");
 
-    INTEGER denom = FACTORIAL[N]*2*3; // *5*7;
+    INTEGER denom = FACTORIAL[N]*2*3*5;
+
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
 
+/*    
     #pragma omp parallel 
     {
     INTEGER y[N+1];
@@ -664,17 +770,17 @@ int main(void) {
         c[n] = y[0]; 
     }
     }
+*/    
+    coeffs(K, N, BCH, c, denom, 0);
 
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
     printf("coeffs of Lyndon words: time=%g seconds\n", t);
-
     for (int n=0; n<n_lyndon; n++) {
-        printf("%8i  %8li  %8li    ", n, LWI[n], MDI[n]);
+        printf("%8i  %8li  %8li  %8li  %8li    ", n, p1[n], p2[n], LWI[n], MDI[n]);
         print_word(nn[n], W[n]);
         INTEGER d = gcd(c[n], denom);
         printf(" %8li/%li\n", c[n]/d, denom/d);
     }
-
     return EXIT_SUCCESS ;
 }
