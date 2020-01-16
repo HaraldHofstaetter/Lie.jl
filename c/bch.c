@@ -524,7 +524,6 @@ void phi(INTEGER y[], int n, unsigned char w[], expr* ex, INTEGER v[]) {
     }
 }
 
-
 INTEGER gcd(INTEGER a, INTEGER b) {
     while (b!=0) {
        INTEGER t = b; 
@@ -540,13 +539,19 @@ INTEGER gcd(INTEGER a, INTEGER b) {
 
 
 int main(void) {
-    const unsigned N=5;
+    const unsigned N=20;
     const unsigned K=2;
 
-    clock_t t = clock();
+    struct timespec t0, t1;
+    double t;
+
+    clock_gettime(CLOCK_MONOTONIC, &t0);	
+    
     init_all(K, N);
-    t = clock()-t;
-    printf("time for generating Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);	
+    t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
+    printf("time for generating Lyndon words: t=%g\n", t );
 
     expr *A = generator(0);
     expr *B = generator(1);
@@ -556,13 +561,18 @@ int main(void) {
     print_expr(BCH);
     printf("\n");
 
-    INTEGER denom = FACTORIAL[N]*2*3;
+    INTEGER denom = FACTORIAL[N]*2*3*5*7;
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+
+    clock_gettime(CLOCK_MONOTONIC, &t0);	
+
+    #pragma omp parallel 
+    {
     INTEGER y[N+1];
     INTEGER e[N+1];
 
-    t = clock();
+    #pragma omp for
     for (int n=0; n<n_lyndon; n++) {
         for (int j=0; j<=nn[n]; j++) {
             e[j] = 0;
@@ -571,15 +581,20 @@ int main(void) {
         phi(y, nn[n], W[n], BCH, e);
         c[n] = y[0]; 
     }
-    t = clock()-t;
-    printf("time for coeffs of Lyndon words: t=%g\n", t /((double) CLOCKS_PER_SEC));
+    }
 
+    clock_gettime(CLOCK_MONOTONIC, &t1);	
+    t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
+    printf("time for coeffs of Lyndon words: t=%g\n", t);
+
+    /*
     for (int n=0; n<n_lyndon; n++) {
         printf("%8i    ", n);
         print_word(nn[n], W[n]);
         INTEGER d = gcd(c[n], denom);
         printf(" %8li/%li\n", c[n]/d, denom/d);
     }
+    */
 
     return EXIT_SUCCESS ;
 }
