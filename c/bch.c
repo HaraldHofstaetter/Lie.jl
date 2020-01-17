@@ -135,6 +135,8 @@ size_t word_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
 }
 
 size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
+    /* METHOD: binary search
+     */
     while (l<=r) {
         size_t m = l + (r-l)/2;
         if (LWI[m]==wi) {
@@ -324,7 +326,7 @@ void free_lyndon_words(void) {
 }
 
 void init_factorial(void) {
-    FACTORIAL = malloc((N+1)*sizeof(INTEGER)); /*TODO check for error */
+    FACTORIAL = malloc((N+1)*sizeof(INTEGER)); 
     FACTORIAL[0] = 1;
     for (int n=1; n<=N; n++) {
         FACTORIAL[n] = n*FACTORIAL[n-1];
@@ -930,7 +932,11 @@ int main(int argc, char*argv[]) {
             break;
     }
 
-    size_t N = get_arg(argc, argv, "N", 5, 1, 30);
+#ifdef USE_INT128_T
+    size_t N = get_arg(argc, argv, "N", 5, 1, 32);
+#else
+    size_t N = get_arg(argc, argv, "N", 5, 1, 16);
+#endif 
     size_t M = get_arg(argc, argv, "M", 0, 0, N>16 ? 16 : N);
 
     struct timespec t0, t1;
@@ -942,8 +948,12 @@ int main(int argc, char*argv[]) {
     t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
     printf("initialization: time=%g seconds\n", t );
 
-    INTEGER denom = FACTORIAL[N]*2*3*5*7;
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+#ifdef USE_INT128_T
+    INTEGER denom = FACTORIAL[N]*2*3*5*7*11*13;
+#else
+    INTEGER denom = FACTORIAL[N]*2*3*5*7;
+#endif 
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
     coeffs(ex, c, denom, 1);
