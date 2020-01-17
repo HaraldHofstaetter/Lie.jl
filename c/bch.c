@@ -692,15 +692,23 @@ void init_lookup_table(size_t M) {
     size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1; /* other dimension */
     LUT = malloc(LUT_LD*LUT_D2*sizeof(size_t));
 
-    size_t H[N*N];
-    size_t W2I[N*N];
-    uint8_t w[N];
+    //size_t H[N*N];
+    //size_t W2I[N*N];
+    //uint8_t w[N];
 
     for (int n=1; n<=M; n++) {
         size_t i1 = ii[n-1];
         size_t i2 = ii[n]-1;
 
         max_lookup_size = n-1;
+
+        #pragma omp parallel 
+        {
+        size_t H[N*N];
+        size_t W2I[N*N];
+        uint8_t w[N];
+        
+        #pragma omp for
         for (int i=0; i<ipow(K, n); i++) {
             gen_ith_word_of_length_n(i, n, w);
 
@@ -719,6 +727,7 @@ void init_lookup_table(size_t M) {
                 }
             }
         } 
+        }
     }
     max_lookup_size = M;
 }
@@ -916,7 +925,7 @@ int main(int argc, char*argv[]) {
     int bch_specific = 0;
     uint8_t K = 2;
 
-    switch(get_arg(argc, argv, "expression", 0, 0, 3)) {
+    switch(get_arg(argc, argv, "expression", 0, 0, 4)) {
         case 0:
             K = 2;
             A = generator(0);
@@ -943,6 +952,13 @@ int main(int argc, char*argv[]) {
             B = generator(1);
             C = generator(2);
             ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
+            break;
+        case 4:
+            K = 2;
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(exponential(A), exponential(B)));
+            bch_specific = 0;
             break;
     }
 
