@@ -89,12 +89,6 @@ void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
      * OUTPUT: nLW[n] ... number of lyndon words with K letters of length n+1, n=0,...,N-1
      * METHOD: Witt's formula
      */
-    /* unsigned int powK[N+1];
-    powK[0] = 1;
-    for (int i=1; i<=N; i++) {
-        powK[i] = powK[i-1]*K;
-    }*/
-    
     int mu[N];
     moebius_mu(N, mu);
 
@@ -105,13 +99,11 @@ void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
             div_t d1r = div(n, d);
             if (d1r.rem==0) {
                int d1 = d1r.quot; 
-               //h += mu[d-1]*powK[d1]+mu[d1-1]*powK[d];
                h += mu[d-1]*ipow(K, d1)+mu[d1-1]*ipow(K, d);
             }
             d++;
         }
         if (d*d == n) {
-            //h += mu[d-1]*powK[d];
             h += mu[d-1]*ipow(K, d);
         }
         nLW[n-1] = h/n;
@@ -688,13 +680,9 @@ void gen_ith_word_of_length_n(size_t i, size_t n, uint8_t w[]) {
 }
 
 void init_lookup_table(size_t M) {
-    LUT_LD = ii[M];                           /* leading dimension */
-    size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1; /* other dimension */
-    LUT = malloc(LUT_LD*LUT_D2*sizeof(size_t));
-
-    //size_t H[N*N];
-    //size_t W2I[N*N];
-    //uint8_t w[N];
+    LUT_LD = ii[M];                              /* leading dimension */
+    size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1;    /* other dimension */
+    LUT = calloc(LUT_LD*LUT_D2, sizeof(size_t)); /* calloc initializes mem to 0 (intented!) */
 
     for (int n=1; n<=M; n++) {
         size_t i1 = ii[n-1];
@@ -722,9 +710,7 @@ void init_lookup_table(size_t M) {
             size_t wi = W2I[0 +(n-1)*N];
             for (int j=i1; j<=i2; j++) {
                 int c = coeff_word_in_basis_element(w, 0, n-1, j, H, W2I); 
-                if (c!=0) {
-                    LUT[j + wi*LUT_LD] = c;
-                }
+                LUT[j + wi*LUT_LD] = c;
             }
         } 
         }
