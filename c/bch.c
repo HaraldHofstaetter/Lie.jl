@@ -3,6 +3,7 @@
 #include<stdio.h>
 #include<assert.h>
 #include<time.h>
+#include<string.h>
 
 #ifdef USE_INT128_T
 typedef __int128_t INTEGER; 
@@ -10,20 +11,52 @@ typedef __int128_t INTEGER;
 typedef __int64_t INTEGER;
 #endif
 
-
-static uint8_t **W;
-static size_t *p1;
+static size_t K;        /* number of generators */
+static size_t N;        /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
+static uint8_t **W;     /* W[i] ... nth Lyndon word, ordered primarily by length and secondarily
+                           by lexicographical order */
+static size_t *p1;      /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
 static size_t *p2;
-static size_t *nn;
-static size_t *ii;
-static size_t *LWI;
-static size_t *MDI;
-static size_t n_lyndon;
+static size_t *nn;      /* nn[i] = length of W[i] */
+static size_t *ii;      /* W[ii[n-1]] = first Lyndon word of length n; 
+                           W[ii[n]-1] = last Lyndon word of length n */
+static size_t *LWI;     /* LWI[i] = word index of W[i] */
+static size_t *MDI;     /* MDI[i] = multi degree index of W[i] */
+static size_t n_lyndon; /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
+
 static INTEGER *FACTORIAL;
 
-static size_t lookup_size;
+static size_t max_lookup_size;
+static size_t LUT_LD;   
 int *LUT;
 
+
+int ipow(int base, unsigned int exp)
+{
+    /* METHOD: see https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
+     */
+    int result = 1;
+    for (;;)
+    {
+        if (exp & 1)
+            result *= base;
+        exp >>= 1;
+        if (!exp)
+            break;
+        base *= base;
+    }
+    return result;
+}
+
+
+INTEGER gcd(INTEGER a, INTEGER b) {
+    while (b!=0) {
+       INTEGER t = b; 
+       b = a%b; 
+       a = t; 
+    }
+    return a>=0 ? a : -a;
+}
 
 void moebius_mu(size_t N, int mu[N]) {
     /* INPUT: N
@@ -42,17 +75,18 @@ void moebius_mu(size_t N, int mu[N]) {
     }
 }
 
+
 void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
     /* INPUT: K ... number of letters
      *        N ... maximum lenght of lyndon words
      * OUTPUT: nLW[n] ... number of lyndon words with K letters of length n+1, n=0,...,N-1
      * METHOD: Witt's formula
      */
-    unsigned int powK[N+1];
+    /* unsigned int powK[N+1];
     powK[0] = 1;
     for (int i=1; i<=N; i++) {
         powK[i] = powK[i-1]*K;
-    }
+    }*/
     
     int mu[N];
     moebius_mu(N, mu);
@@ -64,22 +98,26 @@ void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
             div_t d1r = div(n, d);
             if (d1r.rem==0) {
                int d1 = d1r.quot; 
-               h += mu[d-1]*powK[d1]+mu[d1-1]*powK[d];
+               //h += mu[d-1]*powK[d1]+mu[d1-1]*powK[d];
+               h += mu[d-1]*ipow(K, d1)+mu[d1-1]*ipow(K, d);
             }
             d++;
         }
         if (d*d == n) {
-            h += mu[d-1]*powK[d];
+            //h += mu[d-1]*powK[d];
+            h += mu[d-1]*ipow(K, d);
         }
         nLW[n-1] = h/n;
     }
 }
+
 
 void print_word(size_t n, uint8_t w[]) {        
     for (int j=0; j<n; j++) {
            printf("%i", w[j]);
     }
 }
+
 
 size_t word_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
     //size_t x = w[r];
@@ -106,8 +144,8 @@ size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
             r = m-1;
         }
     }
-    fprintf(stderr, "LYNDON WORD INDEX NOT FOUND: %li\n", wi);
-    assert(0); /* should not reach this point, otherwise word not found */ 
+    fprintf(stderr, "ERROR: LYNDON WORD INDEX NOT FOUND: %li\n", wi);
+    exit(EXIT_FAILURE);
 }
 
 unsigned int binomial(unsigned int n, unsigned int k) {
@@ -131,7 +169,7 @@ unsigned int binomial(unsigned int n, unsigned int k) {
     nn++;
     uint64_t rr = 2;
     while (rr <= k) {
-        x = (x*nn) / rr;  /* TODO:  handle possible overflow 
+        x = (x*nn) / rr;  /* TODO: detect possible overflow 
                              (cannot occur with reasonable parameters for BCH) */
         rr++;
         nn++;
@@ -139,15 +177,6 @@ unsigned int binomial(unsigned int n, unsigned int k) {
     return x;
 }
 
-size_t hom_index(size_t K, size_t x[]) {
-    size_t i = 0;
-    size_t n = 0;
-    for (int k=0; k<K; k++) {
-        n += x[K-k-1];
-        i += binomial(k+n, n-1);
-    }
-    return i;
-}
 
 size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
     size_t h[K];
@@ -157,7 +186,14 @@ size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
     for (int j=l; j<=r; j++) {
         h[w[j]]++;
     }
-    return hom_index(K, h);
+    size_t index = 0;
+    size_t n = 0;
+    for (int k=0; k<K; k++) {
+        n += h[K-k-1];
+        index += binomial(k+n, n-1);
+    }
+    return index;
+    
 }
 
 
@@ -226,7 +262,7 @@ void genLW(uint8_t K, size_t n, size_t t, size_t p[],
 }
 
 
-void init_lyndon_words(uint8_t K, size_t N) {
+void init_lyndon_words(void) {
     size_t nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
@@ -277,7 +313,7 @@ void init_lyndon_words(uint8_t K, size_t N) {
     assert(wp==n_lyndon);
 }
 
-void init_factorial(size_t N) {
+void init_factorial(void) {
     FACTORIAL = malloc((N+1)*sizeof(INTEGER)); /*TODO check for error */
     FACTORIAL[0] = 1;
     for (int n=1; n<=N; n++) {
@@ -424,18 +460,42 @@ void print_expr(expr* ex) {
             printf(")");
             break;
         default:
-            fprintf(stderr, "unknown expr type %i\n", ex->type);
-            assert(0);
+            fprintf(stderr, "ERROR: unknown expr type %i\n", ex->type);
+            exit(EXIT_FAILURE);
     }
 }
 
-int iszero(INTEGER v[], size_t n) {
+static inline int iszero(INTEGER v[], size_t n) {
     for (int j=0; j<n; j++) {
         if (v[j]!=0) {
             return 0;
         }
     }
     return 1;
+}
+
+static inline void check_for_divisibility_by_int(INTEGER p, int q, INTEGER d) {
+    if (q*d!=p) {
+        int q1 = (q>0?q:-q)/gcd(p,q);
+        fprintf(stderr, "ERROR: dividend not divisble by %i\n", q1);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static inline void check_for_divisibility_by_long_int(INTEGER p, long int q, INTEGER d) {
+    if (q*d!=p) {
+        long int q1 = (q>0?q:-q)/gcd(p,q);
+        fprintf(stderr, "ERROR: dividend not divisble by %li\n", q1);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static inline void check_for_divisibility_by_INTEGER(INTEGER p, INTEGER q, INTEGER d) {
+    if (q*d!=p) {
+        long int q1 = (q>0?q:-q)/gcd(p,q);
+        fprintf(stderr, "ERROR: dividend not divisble by %li\n", q1);
+        exit(EXIT_FAILURE);
+    }
 }
 
 
@@ -496,10 +556,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             for (int j=1; j<=n; j++) {
                 INTEGER h = y[j]*p;
                 INTEGER d = h/q;
-                if (q*d!=h) {
-                    fprintf(stderr, "dividend not divisble by %i\n", q);
-                    assert(0);
-                }
+                check_for_divisibility_by_int(h, q, d);
                 y[j] = d;
             }
             break; 
@@ -518,10 +575,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     long int f = FACTORIAL[k]; /* fits into int => faster arithmetics */
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
-                        if (f*d!=z[j]) {
-                           fprintf(stderr, "dividend not divisble by %li\n", f);
-                           assert(0);
-                        }
+                        check_for_divisibility_by_long_int(z[j], f, d);
                         y[j] += d;
                     }
                 }
@@ -529,10 +583,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     INTEGER f = FACTORIAL[k];
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
-                        if (f*d!=z[j]) {
-                           fprintf(stderr, "dividend not divisble by %li\n", f);
-                           assert(0);
-                        }
+                        check_for_divisibility_by_INTEGER(z[j], f, d);
                         y[j] += d;
                     }
                 }
@@ -554,10 +605,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                 int f = (k%2 ? +1 : -1)*k; /* f = (-1)^(k+1)*k */ 
                 for (int j=0; j<=n; j++) {
                     INTEGER d = z[j]/f;
-                    if (f*d!=z[j]) {
-                       fprintf(stderr, "dividend not divisble by %i\n", f);
-                       assert(0);
-                    }
+                    check_for_divisibility_by_int(z[j], f, d);
                     y[j] += d;
                 }
             }
@@ -567,20 +615,19 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             break;
         default:
             fprintf(stderr, "unknown expr type %i\n", ex->type);
-            assert(0);
+            exit(EXIT_FAILURE);
     }
 }
 
-void init_lookup_table(uint8_t K, size_t M) {
-    lookup_size = M;
-    // TODO ...
-}
 
-
-int coeff_word_in_basis_element(uint8_t K, uint8_t w[], size_t l, size_t r, 
-           size_t j, size_t H[], size_t W2I[], size_t N) { //, size_t CT[], size_t M) {
+int coeff_word_in_basis_element(uint8_t w[], size_t l, size_t r, 
+           size_t j, size_t H[], size_t W2I[]) { 
     if (l==r) {
         return w[l]==j ? 1 : 0;
+    }
+
+    if (r-l+1<=max_lookup_size) {  /* use lookup table */
+        return LUT[j + W2I[l + r*N]*LUT_LD];
     }
 
     if ((H[l+r*N] != MDI[j]) || (W2I[l+r*N] < LWI[j])) {
@@ -595,21 +642,83 @@ int coeff_word_in_basis_element(uint8_t K, uint8_t w[], size_t l, size_t r,
     size_t m1 = nn[j1];
     size_t m2 = nn[j2];
 
-    int c2 = coeff_word_in_basis_element(K, w, l+m2, r, j1, H, W2I, N);
+    int c2 = coeff_word_in_basis_element(w, l+m2, r, j1, H, W2I);
     if (c2!=0) {
-        c2 *= coeff_word_in_basis_element(K, w, l, l+m2-1, j2, H, W2I, N);
+        c2 *= coeff_word_in_basis_element(w, l, l+m2-1, j2, H, W2I);
     }
 
-    int c1 = coeff_word_in_basis_element(K, w, l+m1, r, j2, H, W2I, N);
+    int c1 = coeff_word_in_basis_element(w, l+m1, r, j2, H, W2I);
     if (c1!=0) {
-        c1 *= coeff_word_in_basis_element(K, w, l, l+m1-1, j1, H, W2I, N);
+        c1 *= coeff_word_in_basis_element(w, l, l+m1-1, j1, H, W2I);
     }
 
     return c1 - c2;
 }
 
 
-void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
+void gen_ith_word_of_length_n(size_t i, size_t n, uint8_t w[]) {
+    for (int j=0; j<n; j++) {
+        w[j] = 0;
+    }
+    size_t k=n-1;
+    while (i>0) {
+        w[k] = i%K;
+        i/=K;
+        k--;
+    }
+}
+
+void init_lookup_table(size_t M) {
+    LUT_LD = ii[M];                         /* leading dimension */
+    size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1; /* other dimension */
+    LUT = malloc(LUT_LD*LUT_D2*sizeof(size_t));
+
+    size_t H[N*N];
+    size_t W2I[N*N];
+    uint8_t w[N];
+
+    for (int n=1; n<=M; n++) {
+        size_t i1 = ii[n-1];
+        size_t i2 = ii[n]-1;
+
+        max_lookup_size = n-1;
+        for (int i=0; i<ipow(K, n); i++) {
+            gen_ith_word_of_length_n(i, n, w);
+
+            for (int l=0; l<n; l++) {
+                for (int r=l; r<n; r++) {
+                    H[l + r*N] = multi_degree_index(K, w, l, r); 
+                    W2I[l + r*N] = word_index(K, w, l, r); 
+                }
+            }
+
+            size_t wi = W2I[0 +(n-1)*N];
+            for (int j=i1; j<=i2; j++) {
+                int c = coeff_word_in_basis_element(w, 0, n-1, j, H, W2I); 
+                if (c!=0) {
+                    LUT[j + wi*LUT_LD] = c;
+                }
+            }
+        } 
+    }
+    max_lookup_size = M;
+}
+
+
+static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
+    size_t k = 0;
+    J[0] = i;
+    size_t l = i;
+    while ((k<kmax) && (p1[l]==0)) {
+        k++;
+        l = p2[l];
+        J[k] = l;
+    }
+    return k;
+}
+
+
+void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     INTEGER e[N+1];
 
     /* c[0] needs special handling */
@@ -646,8 +755,7 @@ void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_s
     INTEGER t[N+1];
 
     #pragma omp for
-     //for (int h=h1; h<=h2; h++) {
-     for (int h=h2; h>=h1; h--) {
+    for (int h=h1; h<=h2; h++) {
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
             if (MDI[i]==h) {
@@ -661,17 +769,12 @@ void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_s
 
                 uint8_t *w = W[i];
                 phi(t, N, w, ex, e);
-                c[i] = t[0];
 
-                size_t kW = 0;
-                JW[0] = i;
-                size_t l = i;
-                while (p1[l]==0) {
-                    kW++;
-                    l = p2[l];
-                    JW[kW] = l;
-                    c[l] = t[kW];
+                size_t kW = get_right_factors(i, JW, N);
+                for (int k=0; k<=kW; k++) {
+                    c[JW[k]] = t[k];
                 }
+
                 for (int l=0; l<N; l++) {
                     for (int r=l; r<N; r++) {
                         H[l + r*N] = multi_degree_index(K, w, l, r); 
@@ -681,18 +784,11 @@ void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_s
 
                 for (int j=j1; j<=i-1; j++) {
                     if (MDI[j]==h) {
-                        size_t kB = 0;
-                        JB[0] = j;
-                        size_t l = j;
-                        while ((kB<kW) && (p1[l]==0)) {
-                            kB++;
-                            l = p2[l];
-                            JB[kB] = l;
-                        }
-                        INTEGER d = coeff_word_in_basis_element(K, w, kB, N-1, JB[kB], H, W2I, N); //, CT, M)
+                        size_t kB = get_right_factors(j, JB, kW);
+                        int d = coeff_word_in_basis_element(w, kB, N-1, JB[kB], H, W2I); 
                         if (d!=0) {
-                            for (int l=0; l<=kB; l++) {
-                                c[JW[l]] -= d*c[JB[l]];
+                            for (int k=0; k<=kB; k++) {
+                                c[JW[k]] -= d*c[JB[k]];
                             }
                         }
                     }
@@ -705,35 +801,63 @@ void coeffs(uint8_t K, size_t N, expr* ex, INTEGER c[], INTEGER denom, int bch_s
 
 
 
-INTEGER gcd(INTEGER a, INTEGER b) {
-    while (b!=0) {
-       INTEGER t = b; 
-       b = a%b; 
-       a = t; 
+
+void init_bch(uint8_t number_of_generators, size_t order, size_t max_lookup_size) {
+    K = number_of_generators;
+    N = order;
+    init_factorial();
+    init_lyndon_words();
+    init_lookup_table(max_lookup_size);
+}
+
+
+long long int get_arg(int argc, char*argv[], char* varname, 
+                      long long int default_value, 
+                      long long int min, 
+                      long long int max)
+{
+    for (int k=1; k<argc; k++) {
+        char* sep = strchr(argv[k], '=');
+        if (sep) {
+            *sep ='\0';
+            if (strcmp(argv[k], varname)==0) {
+                char *endptr;
+                long long int value = strtoll(sep+1, &endptr, 10); 
+                if ((*endptr != '\0')||(endptr == sep+1)) {
+                    fprintf(stderr, "ERROR: expected %s=integer\n", argv[k]);
+                    exit(EXIT_FAILURE);
+                }
+                if (value<min) {
+                    fprintf(stderr, "ERROR: expected %s>=%lli, got %lli\n", argv[k], min, value);
+                    exit(EXIT_FAILURE);
+                }
+                if (value>max) {
+                    fprintf(stderr, "ERROR: expected %s<=%lli, got %lli\n", argv[k], max, value);
+                    exit(EXIT_FAILURE);
+                }
+                *sep = '=';
+                return value;
+            }
+            *sep = '=';
+        }   
     }
-    return abs(a);
-}
-
-
-void init_all(uint8_t K, size_t N) {
-    init_factorial(N);
-    init_lyndon_words(K, N);
+    return default_value;
 }
 
 
 
+int main(int argc, char*argv[]) {
+    size_t N = get_arg(argc, argv, "N", 5, 1, 30);
+    size_t M = get_arg(argc, argv, "M", 0, 0, N>15 ? 15 : N);
 
-int main(void) {
-    const size_t N = 12;
-    const uint8_t K = 2;
-
+    uint8_t K = 2;
 
     struct timespec t0, t1;
     double t;
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
     
-    init_all(K, N);
+    init_bch(K, N, M);
 
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
@@ -747,7 +871,7 @@ int main(void) {
     print_expr(BCH);
     printf("\n");
 
-    INTEGER denom = FACTORIAL[N]*2*3*5;
+    INTEGER denom = FACTORIAL[N]*2*3*5*7;
 
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
@@ -771,7 +895,7 @@ int main(void) {
     }
     }
 */    
-    coeffs(K, N, BCH, c, denom, 0);
+    coeffs(BCH, c, denom, 1);
 
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
