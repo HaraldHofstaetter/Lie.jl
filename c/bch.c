@@ -1,9 +1,19 @@
+/*
+ * compile with 
+ *     gcc -O3 -fopenmp -Wall  bch.c -o bch64
+ * or
+ *    gcc -O3 -fopenmp -Wall -DUSE_INT128_T bch.c -o bch128
+ * for enabling 128 bit integer arithmetics
+ *
+ */
+
 #include<stdlib.h>
 #include<stdint.h>
 #include<stdio.h>
 #include<assert.h>
 #include<time.h>
 #include<string.h>
+#include<omp.h>
 
 #ifdef USE_INT128_T
 typedef __int128_t INTEGER; 
@@ -30,7 +40,6 @@ static size_t max_lookup_size;
 static size_t LUT_LD;   
 int *LUT;
 
-
 int ipow(int base, unsigned int exp)
 {
     /* METHOD: see https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
@@ -47,7 +56,6 @@ int ipow(int base, unsigned int exp)
     }
     return result;
 }
-
 
 INTEGER gcd(INTEGER a, INTEGER b) {
     while (b!=0) {
@@ -74,7 +82,6 @@ void moebius_mu(size_t N, int mu[N]) {
         }
     }
 }
-
 
 void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
     /* INPUT: K ... number of letters
@@ -111,17 +118,13 @@ void number_of_lyndon_words(uint8_t K, size_t N, size_t nLW[N]) {
     }
 }
 
-
 void print_word(size_t n, uint8_t w[]) {        
     for (int j=0; j<n; j++) {
            printf("%i", w[j]);
     }
 }
 
-
 size_t word_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
-    //size_t x = w[r];
-    //size_t y = K;
     size_t x = 0;
     size_t y = 1;
     for (int j=r; j>= (signed) l; j--) { /* CAUTION! comparison between signed and unsigned */
@@ -144,7 +147,7 @@ size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
             r = m-1;
         }
     }
-    fprintf(stderr, "ERROR: LYNDON WORD INDEX NOT FOUND: %li\n", wi);
+    fprintf(stderr, "ERROR: Lyndon word index not found: %li\n", wi);
     exit(EXIT_FAILURE);
 }
 
@@ -177,7 +180,6 @@ unsigned int binomial(unsigned int n, unsigned int k) {
     return x;
 }
 
-
 size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
     size_t h[K];
     for (int j=0; j<K; j++) {
@@ -195,8 +197,6 @@ size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
     return index;
     
 }
-
-
 
 /* The following two functions are for the generation of Lyndon words
  * and their standard factorizations.
@@ -261,24 +261,23 @@ void genLW(uint8_t K, size_t n, size_t t, size_t p[],
     }
 }
 
-
 void init_lyndon_words(void) {
     size_t nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
-    n_lyndon = 0; /* global variable */
+    n_lyndon = 0;
     for (int n=1; n<=N; n++) {
         n_lyndon += nLW[n-1];
         mem_len += n*nLW[n-1];
     }
-    W = malloc(n_lyndon*sizeof(uint8_t *)); /*TODO check for error */
-    p1 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
-    p2 = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
-    nn = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
-    LWI = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
-    MDI = malloc(n_lyndon*sizeof(size_t)); /*TODO check for error */
-    ii = malloc((N+1)*sizeof(size_t)); /*TODO check for error */
-    W[0] = malloc(mem_len*sizeof(uint8_t)); /*TODO check for error */ 
+    W = malloc(n_lyndon*sizeof(uint8_t *)); 
+    p1 = malloc(n_lyndon*sizeof(size_t)); 
+    p2 = malloc(n_lyndon*sizeof(size_t)); 
+    nn = malloc(n_lyndon*sizeof(size_t)); 
+    LWI = malloc(n_lyndon*sizeof(size_t));
+    MDI = malloc(n_lyndon*sizeof(size_t));
+    ii = malloc((N+1)*sizeof(size_t)); 
+    W[0] = malloc(mem_len*sizeof(uint8_t)); 
     ii[0] = 0;
     int m=0;
     for (int n=1; n<=N; n++) {
@@ -313,6 +312,17 @@ void init_lyndon_words(void) {
     assert(wp==n_lyndon);
 }
 
+void free_lyndon_words(void) {
+    free(W[0]);
+    free(W);
+    free(p1);
+    free(p2);
+    free(nn);
+    free(ii);
+    free(LWI);
+    free(MDI);
+}
+
 void init_factorial(void) {
     FACTORIAL = malloc((N+1)*sizeof(INTEGER)); /*TODO check for error */
     FACTORIAL[0] = 1;
@@ -321,8 +331,9 @@ void init_factorial(void) {
     }
 }
 
-// TODO: free_factorial, free_lyndon_words, free_all, ...
-
+void free_factorial(void) {
+    free(FACTORIAL);
+}
 
 enum expr_type { UNDEFINED, IDENTITY, GENERATOR, SUM, DIFFERENCE, PRODUCT, 
                  COMMUTATOR, TERM, EXPONENTIAL, LOGARITHM };
@@ -413,6 +424,14 @@ expr* logarithm(expr* arg) {
     return ex;
 }
 
+void free_expr(expr* ex) {
+    if (ex) {
+        free(ex->arg1);
+        free(ex->arg2);
+        free(ex);
+    }
+}    
+
 void print_expr(expr* ex) {
     switch(ex->type) {
         case IDENTITY:
@@ -497,7 +516,6 @@ static inline void check_for_divisibility_by_INTEGER(INTEGER p, INTEGER q, INTEG
         exit(EXIT_FAILURE);
     }
 }
-
 
 void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
     switch (ex->type) {
@@ -614,11 +632,10 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             }
             break;
         default:
-            fprintf(stderr, "unknown expr type %i\n", ex->type);
+            fprintf(stderr, "ERROR: unknown expr type %i\n", ex->type);
             exit(EXIT_FAILURE);
     }
 }
-
 
 int coeff_word_in_basis_element(uint8_t w[], size_t l, size_t r, 
            size_t j, size_t H[], size_t W2I[]) { 
@@ -655,8 +672,8 @@ int coeff_word_in_basis_element(uint8_t w[], size_t l, size_t r,
     return c1 - c2;
 }
 
-
 void gen_ith_word_of_length_n(size_t i, size_t n, uint8_t w[]) {
+    /* METHOD: compute base K expansion of i */
     for (int j=0; j<n; j++) {
         w[j] = 0;
     }
@@ -669,7 +686,7 @@ void gen_ith_word_of_length_n(size_t i, size_t n, uint8_t w[]) {
 }
 
 void init_lookup_table(size_t M) {
-    LUT_LD = ii[M];                         /* leading dimension */
+    LUT_LD = ii[M];                           /* leading dimension */
     size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1; /* other dimension */
     LUT = malloc(LUT_LD*LUT_D2*sizeof(size_t));
 
@@ -704,6 +721,9 @@ void init_lookup_table(size_t M) {
     max_lookup_size = M;
 }
 
+void free_lookup_table(void) {
+    free(LUT);
+}
 
 static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
     size_t k = 0;
@@ -716,7 +736,6 @@ static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
     }
     return k;
 }
-
 
 void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     INTEGER e[N+1];
@@ -799,9 +818,6 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     }
 }
 
-
-
-
 void init_bch(uint8_t number_of_generators, size_t order, size_t max_lookup_size) {
     K = number_of_generators;
     N = order;
@@ -810,6 +826,11 @@ void init_bch(uint8_t number_of_generators, size_t order, size_t max_lookup_size
     init_lookup_table(max_lookup_size);
 }
 
+void free_bch(void) {
+    free_factorial();
+    free_lyndon_words();
+    free_lookup_table();
+}
 
 long long int get_arg(int argc, char*argv[], char* varname, 
                       long long int default_value, 
@@ -844,67 +865,103 @@ long long int get_arg(int argc, char*argv[], char* varname,
     return default_value;
 }
 
+void print_basis_element(size_t i) {
+    if (i<K) {
+        printf("%c", (char) ('A'+i));
+    }
+    else {
+        printf("[");
+        print_basis_element(p1[i]);
+        printf(",");
+        print_basis_element(p2[i]);
+        printf("]");
+    }
+}    
 
+void print_lie_series(INTEGER c[], INTEGER denom) {
+    for (int i=0; i<n_lyndon; i++) {
+        if (c[i]!=0) {
+            INTEGER d = gcd(c[i], denom);
+            INTEGER p = c[i]/d;
+            INTEGER q = denom/d;
+            if (p>0) {
+                printf("+");
+            }
+            printf("%li/%li*", (int64_t) p, (int64_t) q); // TODO: output of __int128_t
+            print_basis_element(i);
+        }
+    }
+}
 
 int main(int argc, char*argv[]) {
-    size_t N = get_arg(argc, argv, "N", 5, 1, 30);
-    size_t M = get_arg(argc, argv, "M", 0, 0, N>15 ? 15 : N);
-
+    /* expression: */
+    expr *A = NULL;
+    expr *B = NULL;
+    expr *C = NULL;
+    expr *ex = NULL;
     uint8_t K = 2;
+
+    switch(get_arg(argc, argv, "expression", 0, 0, 3)) {
+        case 0:
+            K = 2;
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(exponential(A), exponential(B)));
+            break;
+        case 1:
+            K = 2;
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(product(exponential(A), exponential(B)), exponential(A)));
+            break;
+        case 2:
+            K = 3;  // !!! SIC !!!
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(exponential(A), exponential(B)));
+            break;
+            break;
+        case 3:
+            K = 3;
+            A = generator(0);
+            B = generator(1);
+            C = generator(2);
+            ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
+            break;
+    }
+
+    size_t N = get_arg(argc, argv, "N", 5, 1, 30);
+    size_t M = get_arg(argc, argv, "M", 0, 0, N>16 ? 16 : N);
 
     struct timespec t0, t1;
     double t;
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
-    
     init_bch(K, N, M);
-
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
     printf("initialization: time=%g seconds\n", t );
 
-    expr *A = generator(0);
-    expr *B = generator(1);
-    expr *BCH = logarithm(product(exponential(A), exponential(B)));
-    
-    printf("S=");
-    print_expr(BCH);
-    printf("\n");
-
     INTEGER denom = FACTORIAL[N]*2*3*5*7;
-
-
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
-
-/*    
-    #pragma omp parallel 
-    {
-    INTEGER y[N+1];
-    INTEGER e[N+1];
-
-    #pragma omp for
-    for (int n=0; n<n_lyndon; n++) {
-        for (int j=0; j<=nn[n]; j++) {
-            e[j] = 0;
-        }
-        e[nn[n]] = denom;
-        phi(y, nn[n], W[n], BCH, e);
-        c[n] = y[0]; 
-    }
-    }
-*/    
-    coeffs(BCH, c, denom, 1);
-
+    coeffs(ex, c, denom, 1);
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
-    printf("coeffs of Lyndon words: time=%g seconds\n", t);
-    for (int n=0; n<n_lyndon; n++) {
-        printf("%8i  %8li  %8li  %8li  %8li    ", n, p1[n], p2[n], LWI[n], MDI[n]);
-        print_word(nn[n], W[n]);
-        INTEGER d = gcd(c[n], denom);
-        printf(" %8li/%li\n", c[n]/d, denom/d);
-    }
+    printf("computation of Lie series: time=%g seconds\n", t);
+
+    /* output result: */
+    print_expr(ex);
+    printf("=");
+    print_lie_series(c, denom);
+    printf("\n");
+
+    free_expr(A);
+    free_expr(B);
+    free_expr(C);
+    free_expr(ex);
+    free_bch();
+
     return EXIT_SUCCESS ;
 }
