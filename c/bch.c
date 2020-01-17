@@ -901,6 +901,7 @@ int main(int argc, char*argv[]) {
     expr *B = NULL;
     expr *C = NULL;
     expr *ex = NULL;
+    int bch_specific = 0;
     uint8_t K = 2;
 
     switch(get_arg(argc, argv, "expression", 0, 0, 3)) {
@@ -909,6 +910,7 @@ int main(int argc, char*argv[]) {
             A = generator(0);
             B = generator(1);
             ex = logarithm(product(exponential(A), exponential(B)));
+            bch_specific = 1;
             break;
         case 1:
             K = 2;
@@ -950,13 +952,13 @@ int main(int argc, char*argv[]) {
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
 #ifdef USE_INT128_T
-    INTEGER denom = FACTORIAL[N]*2*3*5*7*11*13;
+    INTEGER denom = FACTORIAL[N]*4*3*5*7*11*13;
 #else
-    INTEGER denom = FACTORIAL[N]*2*3*5*7;
+    INTEGER denom = FACTORIAL[N]*4*3*5*7;
 #endif 
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
-    coeffs(ex, c, denom, 1);
+    coeffs(ex, c, denom, bch_specific);
     clock_gettime(CLOCK_MONOTONIC, &t1);	
     t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
     printf("computation of Lie series: time=%g seconds\n", t);
@@ -967,6 +969,7 @@ int main(int argc, char*argv[]) {
     print_lie_series(c, denom);
     printf("\n");
 
+    free(c);
     free_expr(A);
     free_expr(B);
     free_expr(C);
