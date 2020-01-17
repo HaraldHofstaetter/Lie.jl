@@ -895,6 +895,18 @@ void print_lie_series(INTEGER c[], INTEGER denom) {
     }
 }
 
+void print_lists(INTEGER c[], INTEGER denom) {
+    for (int i=0; i<n_lyndon; i++) {
+        INTEGER d = gcd(c[i], denom);
+        INTEGER p = c[i]/d;
+        INTEGER q = denom/d;
+        printf("%10i %3li %10li %10li %20li/%li\n",
+                i+1, nn[i], p1[i]+1, p2[i]+1, (int64_t) p, (int64_t) q); 
+                // TODO: output of __int128_t
+                // NOTE: +1 because for compatibility with Julia version
+    }
+}
+
 int main(int argc, char*argv[]) {
     /* expression: */
     expr *A = NULL;
@@ -964,10 +976,17 @@ int main(int argc, char*argv[]) {
     printf("computation of Lie series: time=%g seconds\n", t);
 
     /* output result: */
-    print_expr(ex);
-    printf("=");
-    print_lie_series(c, denom);
-    printf("\n");
+    switch(get_arg(argc, argv, "lists_output", N<=10 ? 0 : 1, 0, 1)) {
+        case 0:
+            print_expr(ex);
+            printf("=");
+            print_lie_series(c, denom);
+            printf("\n");
+            break;
+        case 1:
+            print_lists(c, denom);
+            break;
+    }
 
     free(c);
     free_expr(A);
