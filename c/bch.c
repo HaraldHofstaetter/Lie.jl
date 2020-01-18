@@ -810,6 +810,11 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     size_t JB[N];
     INTEGER t[N+1];
 
+    /* Note: We choose schedule(dynamic, 1) because each
+     * iteration of the loop is associated with a specific 
+     * multi degree index, and the work to be done varies widely
+     * for different multi degree indices. 
+     */
     #pragma omp for schedule(dynamic,1) 
     for (int h=h1; h<=h2; h++) {
         size_t j1 = 0;
