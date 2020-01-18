@@ -631,17 +631,16 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
     }
 }
 
-int coeff_word_in_basis_element(uint8_t w[], size_t l, size_t r, 
-           size_t j, size_t H[], size_t W2I[]) { 
-    if (l==r) {
-        return w[l]==j ? 1 : 0;
+int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t H[], size_t W2I[]) { 
+    if (H[l+r*N] != MDI[j]) {
+        return 0;
     }
 
     if (r-l+1<=max_lookup_size) {  /* use lookup table */
         return LUT[j + W2I[l + r*N]*LUT_LD];
     }
 
-    if ((H[l+r*N] != MDI[j]) || (W2I[l+r*N] < LWI[j])) {
+    if (W2I[l+r*N] < LWI[j]) {
         return 0;
     }
     if (W2I[l+r*N] == LWI[j]) {
@@ -653,14 +652,14 @@ int coeff_word_in_basis_element(uint8_t w[], size_t l, size_t r,
     size_t m1 = nn[j1];
     size_t m2 = nn[j2];
 
-    int c2 = coeff_word_in_basis_element(w, l+m2, r, j1, H, W2I);
+    int c2 = coeff_word_in_basis_element(l+m2, r, j1, H, W2I);
     if (c2!=0) {
-        c2 *= coeff_word_in_basis_element(w, l, l+m2-1, j2, H, W2I);
+        c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, H, W2I);
     }
 
-    int c1 = coeff_word_in_basis_element(w, l+m1, r, j2, H, W2I);
+    int c1 = coeff_word_in_basis_element(l+m1, r, j2, H, W2I);
     if (c1!=0) {
-        c1 *= coeff_word_in_basis_element(w, l, l+m1-1, j1, H, W2I);
+        c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, H, W2I);
     }
 
     return c1 - c2;
@@ -709,7 +708,7 @@ void init_lookup_table(size_t M) {
 
             size_t wi = W2I[0 +(n-1)*N];
             for (int j=i1; j<=i2; j++) {
-                int c = coeff_word_in_basis_element(w, 0, n-1, j, H, W2I); 
+                int c = coeff_word_in_basis_element(0, n-1, j, H, W2I); 
                 LUT[j + wi*LUT_LD] = c;
             }
         } 
@@ -801,7 +800,7 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
                 for (int j=j1; j<=i-1; j++) {
                     if (MDI[j]==h) {
                         size_t kB = get_right_factors(j, JB, kW);
-                        int d = coeff_word_in_basis_element(w, kB, N-1, JB[kB], H, W2I); 
+                        int d = coeff_word_in_basis_element(kB, N-1, JB[kB], H, W2I); 
                         if (d!=0) {
                             for (int k=0; k<=kB; k++) {
                                 c[JW[k]] -= d*c[JB[k]];
@@ -873,7 +872,38 @@ void print_basis_element(size_t i) {
         print_basis_element(p2[i]);
         printf("]");
     }
-}    
+}   
+
+#ifdef USE_INT128_T
+void print_INTEGER(__int128_t x) {
+    int s = 1;
+    if (x<0) {
+        s = -1;
+        x = -x;
+    }
+    uint64_t F = 1000000000000000000ULL;
+    int64_t x1 = x % F;
+    x /=F;
+    if (x>0) {
+        int64_t x2 = x % F;
+        x /= F;
+        if (x>0) {
+            int64_t x3 = x;
+            printf("%li%017li%017li",s*x3,x2,x1);
+        }
+        else {
+            printf("%li%017li",s*x2,x1);
+        }
+    }
+    else {
+        printf("%li",s*x1);
+    }
+}
+#else
+void print_INTEGER(int64_t x) {
+    printf("%li",x);
+}
+#endif
 
 void print_lie_series(INTEGER c[], INTEGER denom) {
     for (int i=0; i<n_lyndon; i++) {
@@ -884,7 +914,10 @@ void print_lie_series(INTEGER c[], INTEGER denom) {
             if (p>0) {
                 printf("+");
             }
-            printf("%li/%li*", (int64_t) p, (int64_t) q); // TODO: output of __int128_t
+            print_INTEGER(p);
+            printf("/");
+            print_INTEGER(q);
+            printf("*");
             print_basis_element(i);
         }
     }
@@ -895,10 +928,12 @@ void print_lists(INTEGER c[], INTEGER denom) {
         INTEGER d = gcd(c[i], denom);
         INTEGER p = c[i]/d;
         INTEGER q = denom/d;
-        printf("%10i %3li %10li %10li %20li/%li\n",
-                i+1, nn[i], p1[i]+1, p2[i]+1, (int64_t) p, (int64_t) q); 
-                // TODO: output of __int128_t
-                // NOTE: +1 because for compatibility with Julia version
+        printf("%10i %3li %10li %10li    ", i+1, nn[i], p1[i]+1, p2[i]+1);
+        /* NOTE: +1 because for compatibility with Julia version */
+        print_INTEGER(p);
+        printf("/");
+        print_INTEGER(q);
+        printf("\n");
     }
 }
 
