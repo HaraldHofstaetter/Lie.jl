@@ -729,7 +729,7 @@ void init_lookup_table(size_t M) {
         size_t W2I[N*N];
         uint8_t w[N];
         
-        #pragma omp for
+        #pragma omp for schedule(dynamic,1)
         for (int i=0; i<ipow(K, n); i++) {
             gen_ith_word_of_length_n(i, n, w);
 
@@ -810,7 +810,7 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     size_t JB[N];
     INTEGER t[N+1];
 
-    #pragma omp for
+    #pragma omp for schedule(dynamic,1) 
     for (int h=h1; h<=h2; h++) {
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
