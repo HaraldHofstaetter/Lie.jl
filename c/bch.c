@@ -37,8 +37,16 @@ static size_t n_lyndon; /* number of Lyndon words of length <=N, n_lyndon = ii[N
 static INTEGER *FACTORIAL;
 
 static size_t max_lookup_size;
-static size_t LUT_LD;   
-int *LUT;
+static int **LUT;
+static size_t *LUT_D1; /* LUT_D1[i] = number of Lyndon words (Lyndon basis elements) 
+                          which have multi degree index i */
+static size_t *LUT_D2; /* LUT D2[i] = number of all words of length <= max_lookup_size
+                          which have multi degree index i */
+static size_t *LUT_P1; /* Lyndon word W[i] is the LUT_P1[i]-th Lyndon word having 
+                          multi degree index MDI[i] */
+static size_t *LUT_P2; /* Word with index i is the LUT_P2[i]-th word in the list of all words 
+                          having the same multi degree index as the given word with index i */
+
 
 int ipow(int base, unsigned int exp)
 {
@@ -632,18 +640,21 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
 }
 
 int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t H[], size_t W2I[]) { 
-    if (H[l+r*N] != MDI[j]) {
-        return 0;
+    
+    size_t mdi = H[l + r*N];
+    if (mdi != MDI[j]) {
+        return 0;  /* multi-degrees don't match */
     }
 
+    size_t wi = W2I[l + r*N];
     if (r-l+1<=max_lookup_size) {  /* use lookup table */
-        return LUT[j + W2I[l + r*N]*LUT_LD];
+        return LUT[mdi][LUT_P1[j] + LUT_P2[wi]*LUT_D1[mdi]];
     }
 
-    if (W2I[l+r*N] < LWI[j]) {
+    if (wi < LWI[j]) {
         return 0;
     }
-    if (W2I[l+r*N] == LWI[j]) {
+    if (wi == LWI[j]) {
         return 1;
     }
 
@@ -679,9 +690,32 @@ void gen_ith_word_of_length_n(size_t i, size_t n, uint8_t w[]) {
 }
 
 void init_lookup_table(size_t M) {
-    LUT_LD = ii[M];                              /* leading dimension */
-    size_t LUT_D2 = (ipow(K, M+1)-1)/(K-1)-1;    /* other dimension */
-    LUT = calloc(LUT_LD*LUT_D2, sizeof(size_t)); /* calloc initializes mem to 0 (intented!) */
+    size_t H = MDI[ii[M]-1]+1; 
+    LUT_D1 = calloc(H, sizeof(size_t));
+    LUT_P1 = calloc(ii[M], sizeof(size_t));
+    for (int i=0; i<ii[M]; i++) {
+        LUT_P1[i] = LUT_D1[MDI[i]];
+        LUT_D1[MDI[i]]++;
+    }
+    LUT_D2 = calloc(H, sizeof(size_t));
+    LUT_P2 = calloc((ipow(K, M+1)-1)/(K-1)-1, sizeof(size_t));
+    uint8_t w[M];
+    for (int n=1; n<=M; n++) {
+        for (int i=0; i<ipow(K, n); i++) {
+            gen_ith_word_of_length_n(i, n, w);
+            size_t wi = word_index(K, w, 0, n-1);
+            size_t mdi = multi_degree_index(K, w, 0, n-1);
+            LUT_P2[wi] = LUT_D2[mdi];
+            LUT_D2[mdi]++;
+        }
+    }
+    LUT = calloc(H, sizeof(size_t*));
+    for (int h=0; h<H; h++) {
+        size_t d = LUT_D1[h]*LUT_D2[h];
+        if (d>0) {
+            LUT[h] = calloc(d, sizeof(int));
+        }
+    }
 
     for (int n=1; n<=M; n++) {
         size_t i1 = ii[n-1];
@@ -705,13 +739,16 @@ void init_lookup_table(size_t M) {
                     W2I[l + r*N] = word_index(K, w, l, r); 
                 }
             }
-
+            size_t mdi = H[0 +(n-1)*N];
             size_t wi = W2I[0 +(n-1)*N];
+
             for (int j=i1; j<=i2; j++) {
-                int c = coeff_word_in_basis_element(0, n-1, j, H, W2I); 
-                LUT[j + wi*LUT_LD] = c;
+                if (MDI[j]==mdi) {
+                    int c = coeff_word_in_basis_element(0, n-1, j, H, W2I); 
+                    LUT[mdi][LUT_P1[j] + LUT_P2[wi]*LUT_D1[mdi]] = c;
+                }
             }
-        } 
+        }
         }
     }
     max_lookup_size = M;
@@ -719,6 +756,10 @@ void init_lookup_table(size_t M) {
 
 void free_lookup_table(void) {
     free(LUT);
+    free(LUT_D1);
+    free(LUT_D2);
+    free(LUT_P1);
+    free(LUT_P2);
 }
 
 static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
@@ -988,7 +1029,7 @@ int main(int argc, char*argv[]) {
 #else
     size_t N = get_arg(argc, argv, "N", 5, 1, 16);
 #endif 
-    size_t M = get_arg(argc, argv, "M", 0, 0, N>16 ? 16 : N);
+    size_t M = get_arg(argc, argv, "M", 0, 0, N>20 ? 20 : N);
 
     struct timespec t0, t1;
     double t;
