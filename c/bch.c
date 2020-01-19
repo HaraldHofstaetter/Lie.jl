@@ -302,15 +302,9 @@ void init_lyndon_words(void) {
     size_t split[N*N];
     size_t wp = 0;
     for (int n=1; n<=N; n++) {
-        for (int i=0; i<=n; i++) {
-            a[i] = 0;
-        }
-        for (int i=0; i<n; i++) {
-            p[i] = 1;
-        }
-        for (int i=0; i<n*n; i++) {
-            split[i] = 0;
-        }
+        for (int i=0; i<=n; i++) a[i] = 0; 
+        for (int i=0; i<n; i++) p[i] = 1; 
+        for (int i=0; i<n*n; i++) split[i] = 0; 
         genLW(K, n, 1, p, a, &wp, split);
     }
     assert(wp==n_lyndon);
@@ -565,6 +559,9 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             break;
         case PRODUCT: 
             if (iszero(v, n+1)) {
+                for (int j=0; j<n; j++) { //!!!!
+                    y[j] = 0;
+                }
                 return;
             }
             phi(y, n, w, ex->arg2, v);
@@ -596,6 +593,9 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                 z[j] = v[j];
                 y[j] = v[j];                    
             }
+            if (iszero(z, n+1)) {
+                return;
+            }
             for (int k=1; k<=n; k++) {
                 phi(z, n, w, ex->arg1, z);
                 if (iszero(z, n+1)) {
@@ -621,14 +621,23 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             }
             break;
         case LOGARITHM: {
-            expr* lm1 = difference(ex->arg1, identity());
             INTEGER z[n+1];
             for (int j=0; j<=n; j++) {
                 z[j] = v[j];
                 y[j] = v[j];                    
+            } 
+            if (iszero(z, n+1)) {
+                return;
             }
+            INTEGER h[n+1];
             for (int k=1; k<=n; k++) {
-                phi(z, n, w, lm1, z);
+                for (int j=0; j<=n; j++) {
+                    h[j] = z[j];
+                }
+                phi(z, n, w, ex->arg1, z);
+                for (int j=0; j<=n; j++) {
+                    z[j] -= h[j];
+                }
                 if (iszero(z, n+1)) {
                    return;
                 }
@@ -639,7 +648,6 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     y[j] += d;
                 }
             }
-            free(lm1);
             }
             break;
         default:
