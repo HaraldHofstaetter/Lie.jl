@@ -284,11 +284,14 @@ void init_lyndon_words(void) {
     for (int n=1; n<=N; n++) {
         ii[n] = ii[n-1] + nLW[n-1];
         for (int k=0; k<nLW[n-1]; k++) {            
-            W[m+1] = W[m]+n;
+            if (m<n_lyndon-1) { /* avoiding illegal W[n_lyndon] */
+                W[m+1] = W[m]+n;
+            }
             nn[m] = n;
             m++;
         }
     }
+    assert(m==n_lyndon);
     for (int i=0; i<K; i++) {
         p1[i]=i;
         p2[i]=0;
@@ -337,7 +340,7 @@ void free_factorial(void) {
 }
 
 enum expr_type { UNDEFINED, IDENTITY, GENERATOR, SUM, DIFFERENCE, PRODUCT, 
-                 COMMUTATOR, TERM, EXPONENTIAL, LOGARITHM };
+                 NEGATION, TERM, EXPONENTIAL, LOGARITHM };
 
 typedef struct expr {
     enum expr_type type;
@@ -357,16 +360,16 @@ expr* undefined_expr(void) {
     return ex;
 }
 
+expr* identity(void) {
+    expr *ex = undefined_expr();
+    ex->type = IDENTITY;
+    return ex;
+}
+
 expr* generator(uint8_t n) {
     expr *ex = undefined_expr();
     ex->type = GENERATOR;
     ex->num = n;
-    return ex;
-}
-
-expr* identity(void) {
-    expr *ex = undefined_expr();
-    ex->type = IDENTITY;
     return ex;
 }
 
@@ -394,11 +397,10 @@ expr* product(expr* arg1, expr* arg2) {
     return ex;
 }
 
-expr* commutator(expr* arg1, expr* arg2) {
+expr* negation(expr* arg) {
     expr *ex = undefined_expr();
-    ex->type = COMMUTATOR;
-    ex->arg1 = arg1;
-    ex->arg2 = arg2;
+    ex->type = NEGATION;
+    ex->arg1 = arg;
     return ex;
 }
 
@@ -424,6 +426,12 @@ expr* logarithm(expr* arg) {
     ex->arg1 = arg;
     return ex;
 }
+
+expr* commutator(expr* arg1, expr* arg2) {
+    return difference(product(arg1, arg2), 
+                      product(arg2, arg1));
+}
+
 
 void free_expr(expr* ex) {
     if (ex) {
@@ -460,14 +468,13 @@ void print_expr(expr* ex) {
             printf("*");
             print_expr(ex->arg2);
             break;
-        case COMMUTATOR: 
-            printf("[");
+        case NEGATION: 
+            printf("(-1)*");
             print_expr(ex->arg1);
-            printf(",");
-            print_expr(ex->arg2);
-            printf("]");
             break;
         case TERM: 
+            printf("(%i/%i)*", ex->num, ex->den);
+            print_expr(ex->arg1);
             break;
         case EXPONENTIAL:
             printf("exp(");
@@ -566,13 +573,17 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             }
             phi(y, n, w, ex->arg1, y);
             break;
-        //case COMMUTATOR: 
-        //    break;
+        case NEGATION: 
+            phi(y, n, w, ex->arg1, v);
+            for (int j=0; j<n; j++) {
+                y[j] = -y[j];
+            }
+            break;
         case TERM: 
             phi(y, n, w, ex->arg1, v);
             int p = ex->num;
             int q = ex->den;
-            for (int j=1; j<=n; j++) {
+            for (int j=0; j<n; j++) {
                 INTEGER h = y[j]*p;
                 INTEGER d = h/q;
                 check_for_divisibility_by_int(h, q, d);
@@ -991,7 +1002,9 @@ int main(int argc, char*argv[]) {
     int bch_specific = 0;
     uint8_t K = 2;
 
-    switch(get_arg(argc, argv, "expression", 0, 0, 4)) {
+    INTEGER fac = 1;
+
+    switch(get_arg(argc, argv, "expression", 0, 0, 6)) {
         case 0:
             K = 2;
             A = generator(0);
@@ -1006,11 +1019,16 @@ int main(int argc, char*argv[]) {
             ex = logarithm(product(product(exponential(A), exponential(B)), exponential(A)));
             break;
         case 2:
-            K = 3;  // !!! SIC !!!
+            K = 2;
             A = generator(0);
+            expr *halfA = term(1, 2, A);
             B = generator(1);
-            ex = logarithm(product(exponential(A), exponential(B)));
-            break;
+            ex = logarithm(product(product(exponential(halfA), exponential(B)), exponential(halfA)));
+#ifdef USE_INT128_T
+            fac = 1ll<<32;
+#else
+            fac = 1<<16;
+#endif
             break;
         case 3:
             K = 3;
@@ -1020,6 +1038,19 @@ int main(int argc, char*argv[]) {
             ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
             break;
         case 4:
+            K = 2;
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(product(exponential(A), exponential(B)),
+                           product(exponential(negation(A)),exponential(negation(B)))));
+            break;
+        case 5:
+            K = 3;  // !!! SIC !!!
+            A = generator(0);
+            B = generator(1);
+            ex = logarithm(product(exponential(A), exponential(B)));
+            break;
+        case 6:
             K = 2;
             A = generator(0);
             B = generator(1);
@@ -1046,9 +1077,9 @@ int main(int argc, char*argv[]) {
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
 #ifdef USE_INT128_T
-    INTEGER denom = FACTORIAL[N]*4*3*5*7*11*13;
+    INTEGER denom = FACTORIAL[N]*4*3*5*7*11*13*fac;
 #else
-    INTEGER denom = FACTORIAL[N]*4*3*5*7;
+    INTEGER denom = FACTORIAL[N]*4*3*5*7*fac;
 #endif 
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
@@ -1066,6 +1097,9 @@ int main(int argc, char*argv[]) {
             printf("\n");
             break;
         case 1:
+            printf("expression=");
+            print_expr(ex);
+            printf("\n");
             print_lists(c, denom);
             break;
     }
