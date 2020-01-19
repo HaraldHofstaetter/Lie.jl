@@ -639,7 +639,6 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                     y[j] += d;
                 }
             }
-            free(lm1->arg2);
             free(lm1);
             }
             break;
@@ -649,16 +648,16 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
     }
 }
 
-int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t H[], size_t W2I[]) { 
+int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D2I[], size_t W2I[]) { 
     
-    size_t mdi = H[l + r*N];
-    if (mdi != MDI[j]) {
+    size_t di = D2I[l + r*N];
+    if (di != MDI[j]) {
         return 0;  /* multi-degrees don't match */
     }
 
     size_t wi = W2I[l + r*N];
     if (r-l+1<=max_lookup_size) {  /* use lookup table */
-        return LUT[mdi][LUT_P1[j] + LUT_P2[wi]*LUT_D1[mdi]];
+        return LUT[di][LUT_P1[j] + LUT_P2[wi]*LUT_D1[di]];
     }
 
     if (wi < LWI[j]) {
@@ -673,14 +672,14 @@ int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t H[], size_t
     size_t m1 = nn[j1];
     size_t m2 = nn[j2];
 
-    int c2 = coeff_word_in_basis_element(l+m2, r, j1, H, W2I);
+    int c2 = coeff_word_in_basis_element(l+m2, r, j1, D2I, W2I);
     if (c2!=0) {
-        c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, H, W2I);
+        c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D2I, W2I);
     }
 
-    int c1 = coeff_word_in_basis_element(l+m1, r, j2, H, W2I);
+    int c1 = coeff_word_in_basis_element(l+m1, r, j2, D2I, W2I);
     if (c1!=0) {
-        c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, H, W2I);
+        c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D2I, W2I);
     }
 
     return c1 - c2;
@@ -714,9 +713,9 @@ void init_lookup_table(size_t M) {
         for (int i=0; i<ipow(K, n); i++) {
             gen_ith_word_of_length_n(i, n, w);
             size_t wi = word_index(K, w, 0, n-1);
-            size_t mdi = multi_degree_index(K, w, 0, n-1);
-            LUT_P2[wi] = LUT_D2[mdi];
-            LUT_D2[mdi]++;
+            size_t di = multi_degree_index(K, w, 0, n-1);
+            LUT_P2[wi] = LUT_D2[di];
+            LUT_D2[di]++;
         }
     }
     LUT = calloc(H, sizeof(size_t*));
@@ -735,7 +734,7 @@ void init_lookup_table(size_t M) {
 
         #pragma omp parallel 
         {
-        size_t H[N*N];
+        size_t D2I[N*N];
         size_t W2I[N*N];
         uint8_t w[N];
         
@@ -745,17 +744,17 @@ void init_lookup_table(size_t M) {
 
             for (int l=0; l<n; l++) {
                 for (int r=l; r<n; r++) {
-                    H[l + r*N] = multi_degree_index(K, w, l, r); 
+                    D2I[l + r*N] = multi_degree_index(K, w, l, r); 
                     W2I[l + r*N] = word_index(K, w, l, r); 
                 }
             }
-            size_t mdi = H[0 +(n-1)*N];
+            size_t di = D2I[0 +(n-1)*N];
             size_t wi = W2I[0 +(n-1)*N];
 
             for (int j=i1; j<=i2; j++) {
-                if (MDI[j]==mdi) {
-                    int c = coeff_word_in_basis_element(0, n-1, j, H, W2I); 
-                    LUT[mdi][LUT_P1[j] + LUT_P2[wi]*LUT_D1[mdi]] = c;
+                if (MDI[j]==di) {
+                    int c = coeff_word_in_basis_element(0, n-1, j, D2I, W2I); 
+                    LUT[di][LUT_P1[j] + LUT_P2[wi]*LUT_D1[di]] = c;
                 }
             }
         }
@@ -808,11 +807,11 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
 
     #pragma omp parallel 
     {
-    size_t H[N*N];
+    size_t D2I[N*N];
     size_t W2I[N*N];
     
     for(int l=0; l<=N*N; l++) {
-        H[l] = 0;
+        D2I[l] = 0;
         W2I[l] = 0;
     }
 
@@ -848,7 +847,7 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
 
                 for (int l=0; l<N; l++) {
                     for (int r=l; r<N; r++) {
-                        H[l + r*N] = multi_degree_index(K, w, l, r); 
+                        D2I[l + r*N] = multi_degree_index(K, w, l, r); 
                         W2I[l + r*N] = word_index(K, w, l, r); 
                     }
                 }
@@ -856,7 +855,7 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
                 for (int j=j1; j<=i-1; j++) {
                     if (MDI[j]==h) {
                         size_t kB = get_right_factors(j, JB, kW);
-                        int d = coeff_word_in_basis_element(kB, N-1, JB[kB], H, W2I); 
+                        int d = coeff_word_in_basis_element(kB, N-1, JB[kB], D2I, W2I); 
                         if (d!=0) {
                             for (int k=0; k<=kB; k++) {
                                 c[JW[k]] -= d*c[JB[k]];
