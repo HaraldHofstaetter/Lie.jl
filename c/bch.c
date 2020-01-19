@@ -18,7 +18,7 @@
 #ifdef USE_INT128_T
 typedef __int128_t INTEGER; 
 #else
-typedef __int64_t INTEGER;
+typedef int64_t INTEGER;
 #endif
 
 static size_t K;        /* number of generators */
@@ -197,7 +197,6 @@ size_t multi_degree_index(uint8_t K, uint8_t w[], size_t l, size_t r) {
         index += binomial(k+n, n-1);
     }
     return index;
-    
 }
 
 /* The following two functions are for the generation of Lyndon words
@@ -592,7 +591,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
                    return;
                 }
                 if (k<=20) {
-                    long int f = FACTORIAL[k]; /* fits into int => faster arithmetics */
+                    long int f = FACTORIAL[k]; /* fits into long int => faster execution expected */
                     for (int j=0; j<=n; j++) {
                         INTEGER d = z[j]/f;
                         check_for_divisibility_by_long_int(z[j], f, d);
@@ -927,7 +926,7 @@ void print_INTEGER(__int128_t x) {
         s = -1;
         x = -x;
     }
-    uint64_t F = 1000000000000000000ULL;
+    uint64_t F = 100000000000000000ULL;
     int64_t x1 = x % F;
     x /=F;
     if (x>0) {
@@ -974,8 +973,8 @@ void print_lists(INTEGER c[], INTEGER denom) {
         INTEGER d = gcd(c[i], denom);
         INTEGER p = c[i]/d;
         INTEGER q = denom/d;
-        printf("%10i %3li %10li %10li    ", i+1, nn[i], p1[i]+1, p2[i]+1);
-        /* NOTE: +1 because for compatibility with Julia version */
+        printf("%i\t%li\t%li\t%li\t", i+1, nn[i], p1[i]+1, p2[i]+1);
+        /* NOTE: +1 for compatibility with Julia version */
         print_INTEGER(p);
         printf("/");
         print_INTEGER(q);
