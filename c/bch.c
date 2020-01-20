@@ -496,27 +496,33 @@ static inline int iszero(INTEGER v[], size_t n) {
 }
 
 static inline void check_for_divisibility_by_int(INTEGER p, int q, INTEGER d) {
+#ifndef NO_DIVISIBILITY_CHECKS    
     if (q*d!=p) {
         int q1 = (q>0?q:-q)/gcd(p,q);
         fprintf(stderr, "ERROR: dividend not divisble by %i\n", q1);
         exit(EXIT_FAILURE);
     }
+#endif    
 }
 
 static inline void check_for_divisibility_by_long_int(INTEGER p, long int q, INTEGER d) {
+#ifndef NO_DIVISIBILITY_CHECKS    
     if (q*d!=p) {
         long int q1 = (q>0?q:-q)/gcd(p,q);
         fprintf(stderr, "ERROR: dividend not divisble by %li\n", q1);
         exit(EXIT_FAILURE);
     }
+#endif    
 }
 
 static inline void check_for_divisibility_by_INTEGER(INTEGER p, INTEGER q, INTEGER d) {
+#ifndef NO_DIVISIBILITY_CHECKS    
     if (q*d!=p) {
         long int q1 = (q>0?q:-q)/gcd(p,q);
         fprintf(stderr, "ERROR: dividend not divisble by %li\n", q1);
         exit(EXIT_FAILURE);
     }
+#endif    
 }
 
 void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
@@ -559,7 +565,7 @@ void phi(INTEGER y[], size_t n, uint8_t w[], expr* ex, INTEGER v[]) {
             break;
         case PRODUCT: 
             if (iszero(v, n+1)) {
-                for (int j=0; j<n; j++) { //!!!!
+                for (int j=0; j<n; j++) { 
                     y[j] = 0;
                 }
                 return;
@@ -722,8 +728,10 @@ void init_lookup_table(size_t M) {
             gen_ith_word_of_length_n(i, n, w);
             size_t wi = word_index(K, w, 0, n-1);
             size_t di = multi_degree_index(K, w, 0, n-1);
-            LUT_P2[wi] = LUT_D2[di];
-            LUT_D2[di]++;
+            if (di<H) { /* this holds for all di except the last one */
+               LUT_P2[wi] = LUT_D2[di];
+               LUT_D2[di]++;
+            }
         }
     }
     LUT = calloc(H, sizeof(size_t*));
@@ -876,6 +884,22 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
     }
     }
 }
+
+/* table den_fac obtained with the following Julia code:
+ * n = 33
+ * F = [factorial(Int128(k)) for k=0:n-1]
+ * M = zeros(Int128,n,n)
+ * M[:,1] = F
+ * for m = 2:n
+ *    M[m+1:end,m] = [lcm([M[k,1]*M[n-k+1,m-1] for k=2:n-m+1]) for n=m+1:n]  
+ * end
+ * using LinearAlgebra # for diagm
+ * D = [lcm(M[k,1:k-1]) for k=1:n]
+ * den_fac = [div(D[i],F[i]) for i=1:n]
+ */
+
+static int den_fac[33] = {1, 1, 1, 2, 1, 6, 2, 6, 3, 10, 2, 6, 2, 210, 30, 12, 3, 30, 10, 
+                          210, 42, 330, 30, 60, 30, 546, 42, 28, 2, 60, 4, 924, 231};
 
 void init_bch(uint8_t number_of_generators, size_t order, size_t max_lookup_size) {
     K = number_of_generators;
@@ -1083,11 +1107,7 @@ int main(int argc, char*argv[]) {
     printf("initialization: time=%g seconds\n", t );
 
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
-#ifdef USE_INT128_T
-    INTEGER denom = FACTORIAL[N]*4*3*5*7*11*13*fac;
-#else
-    INTEGER denom = FACTORIAL[N]*4*3*5*7*fac;
-#endif 
+    INTEGER denom = FACTORIAL[N]*den_fac[N]*fac;
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
     coeffs(ex, c, denom, bch_specific);
