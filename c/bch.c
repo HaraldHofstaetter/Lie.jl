@@ -886,16 +886,17 @@ void coeffs(expr* ex, INTEGER c[], INTEGER denom, int bch_specific) {
 }
 
 /* table den_fac obtained with the following Julia code:
- * n = 33
- * F = [factorial(Int128(k)) for k=0:n-1]
- * M = zeros(Int128,n,n)
- * M[:,1] = F
- * for m = 2:n
- *    M[m+1:end,m] = [lcm([M[k,1]*M[n-k+1,m-1] for k=2:n-m+1]) for n=m+1:n]  
- * end
- * using LinearAlgebra # for diagm
- * D = [lcm(M[k,1:k-1]) for k=1:n]
- * den_fac = [div(D[i],F[i]) for i=1:n]
+n = 33
+F = [factorial(Int128(k)) for k=0:n-1]
+M = zeros(Int128,n,n)
+M[:,1] = F
+for m = 2:n
+    M[m+1:end,m] = [lcm([F[k]*M[n-k+1,m-1] for k=2:n-m+1]) for n=m+1:n]  
+end
+using LinearAlgebra # for diagm
+M *= diagm(1:n)
+D = [lcm(M[k,1:k-1]) for k=1:n]
+den_fac = [div(D[i],F[i]) for i=1:n]
  */
 
 static int den_fac[33] = {1, 1, 1, 2, 1, 6, 2, 6, 3, 10, 2, 6, 2, 210, 30, 12, 3, 30, 10, 
@@ -1097,7 +1098,7 @@ int main(int argc, char*argv[]) {
 #endif 
     size_t M = get_arg(argc, argv, "M", 0, 0, N>20 ? 20 : N);
 
-    struct timespec t0, t1;
+    struct timespec t0, t1, t2;
     double t;
 
     clock_gettime(CLOCK_MONOTONIC, &t0);	
@@ -1109,11 +1110,13 @@ int main(int argc, char*argv[]) {
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N]*fac;
 
-    clock_gettime(CLOCK_MONOTONIC, &t0);	
-    coeffs(ex, c, denom, bch_specific);
     clock_gettime(CLOCK_MONOTONIC, &t1);	
-    t = (t1.tv_sec-t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec)*1e-9;
+    coeffs(ex, c, denom, bch_specific);
+    clock_gettime(CLOCK_MONOTONIC, &t2);	
+    t = (t2.tv_sec-t1.tv_sec) + (t2.tv_nsec - t1.tv_nsec)*1e-9;
     printf("computation of Lie series: time=%g seconds\n", t);
+    t = (t2.tv_sec-t0.tv_sec) + (t2.tv_nsec - t0.tv_nsec)*1e-9;
+    printf("total: time=%g seconds\n", t);
 
     /* output result: */
     switch(get_arg(argc, argv, "lists_output", N<=10 ? 0 : 1, 0, 1)) {
