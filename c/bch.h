@@ -44,7 +44,6 @@ typedef struct lie_series_t {
     size_t n_lyndon;
     size_t *p1;
     size_t *p2;
-    size_t *nn;
     INTEGER denom;
     INTEGER *c;
 } lie_series_t;
@@ -53,16 +52,26 @@ lie_series_t lie_series(size_t K, expr_t* expr, size_t N, int64_t fac, size_t M)
 lie_series_t BCH(size_t N, size_t M);
 lie_series_t symBCH(size_t N, size_t M);
 
-void set_verbosity(int verbosity);
-void set_max_lookup_table(size_t M);
+void set_verbosity_level(unsigned int verbosity_level);
+void set_max_lookup_size(size_t M);
 
 void print_lie_series(lie_series_t *LS);
-void print_lists(lie_series_t *LS);
 
+enum {
+    PRINT_INDEX =         1 << 0, 
+    PRINT_DEGREE =        1 << 1, 
+    PRINT_MULTI_DEGREE =  1 << 2, 
+    PRINT_FACTORS =       1 << 3, 
+    PRINT_WORD =          1 << 4, 
+    PRINT_BASIS_ELEMENT = 1 << 5, 
+    PRINT_COEFFICIENT =   1 << 6
+};
+
+void print_lists(lie_series_t *LS, unsigned int what);
+
+void print_word(lie_series_t *LS,  size_t i);
 void print_basis_element(lie_series_t *LS,  size_t i);
-void print_lyndon_word(lie_series_t *LS,  size_t i);
 void print_INTEGER(INTEGER x);
-
 
 void free_lie_series(lie_series_t LS);
 

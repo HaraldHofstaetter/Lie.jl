@@ -7,7 +7,7 @@ function word(i::Int, p1::Array{Int, 1}, p2::Array{Int, 1})
 end
 
 function transform_bchLyndon_table(in::String, out::String) 
-    X = readlines(in)[1:2:end]
+    X = readlines(in)[1:2:end] # [1:2:end] for removing empty lines 
     len = length(X)
 
     W = fill(Int[],len)
@@ -29,13 +29,13 @@ function transform_bchLyndon_table(in::String, out::String)
     p2[1] = 1
     p2[2] = 1
 
-    # new order primarily by length, secondarily by lexicographical order
+    # order Lyndon words primarily by length, secondarily by lexicographical order
     P = sort(1:len, lt=(x,y)->(nn[x]<nn[y] || (nn[x]==nn[y] && W[x]<W[y])))
     Q = invperm(P)
 
     open(out, "w") do io
         for i=1:len
-            println(io, "$(i)\t$(nn[P[i]])\t$(Q[p1[P[i]]])\t$(Q[p2[P[i]]])\t$(num[P[i]])/$(den[P[i]])")
+            println(io, "$(i-1)\t$(nn[P[i]])\t$(Q[p1[P[i]]]-1)\t$(Q[p2[P[i]]]-1)\t$(num[P[i]])/$(den[P[i]])")
         end
     end
 end

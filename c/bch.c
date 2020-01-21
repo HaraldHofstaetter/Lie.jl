@@ -1,19 +1,9 @@
-/*
- * compile with 
- *     gcc -O3 -fopenmp -Wall  bch.c -o bch64
- * or
- *    gcc -O3 -fopenmp -Wall -DUSE_INT128_T bch.c -o bch128
- * for enabling 128 bit integer arithmetics
- *
- */
-
 #include"bch.h"
 #include<stdlib.h>
 #include<stdint.h>
 #include<stdio.h>
 #include<assert.h>
 #include<time.h>
-#include<string.h>
 #include<omp.h>
 
 
@@ -41,6 +31,7 @@ static size_t *LUT_P1; /* Lyndon word W[i] is the LUT_P1[i]-th Lyndon word havin
 static size_t *LUT_P2; /* Word with index i is the LUT_P2[i]-th word in the list of all words 
                           having the same multi degree index as the given word with index i */
 
+static unsigned int verbosity_level;
 static INTEGER *FACTORIAL;
 
 
@@ -303,13 +294,11 @@ static void init_lyndon_words(void) {
 static void free_lyndon_words(void) {
     free(W[0]);
     free(W);
-    // free(p1);
-    // free(p2);
-    /// free(nn);
+    free(nn);
     free(ii);
     free(LWI);
     free(MDI);
-    /* Note: p1, p2, and nn are taken over by a lie_series_t struct
+    /* Note: p1 and p2 are taken over by a lie_series_t struct
        and are eventually freed by free_lie_series */
 }
 
@@ -905,7 +894,6 @@ static lie_series_t gen_result(INTEGER *c, INTEGER denom) {
     LS.n_lyndon = n_lyndon;
     LS.p1 = p1;
     LS.p2 = p2;
-    LS.nn = nn; 
     LS.denom = denom;
     LS.c = c;
     return LS;
@@ -955,51 +943,24 @@ lie_series_t symBCH(size_t N, size_t M) {
 void free_lie_series(lie_series_t LS) {
     free(LS.p1);
     free(LS.p2);
-    free(LS.nn);
     free(LS.c);
 }
 
 
-long long int get_arg(int argc, char*argv[], char* varname, 
-                      long long int default_value, 
-                      long long int min, 
-                      long long int max)
-{
-    for (int k=1; k<argc; k++) {
-        char* sep = strchr(argv[k], '=');
-        if (sep) {
-            *sep ='\0';
-            if (strcmp(argv[k], varname)==0) {
-                char *endptr;
-                long long int value = strtoll(sep+1, &endptr, 10); 
-                if ((*endptr != '\0')||(endptr == sep+1)) {
-                    fprintf(stderr, "ERROR: expected %s=integer\n", argv[k]);
-                    exit(EXIT_FAILURE);
-                }
-                if (value<min) {
-                    fprintf(stderr, "ERROR: expected %s>=%lli, got %lli\n", argv[k], min, value);
-                    exit(EXIT_FAILURE);
-                }
-                if (value>max) {
-                    fprintf(stderr, "ERROR: expected %s<=%lli, got %lli\n", argv[k], max, value);
-                    exit(EXIT_FAILURE);
-                }
-                *sep = '=';
-                return value;
-            }
-            *sep = '=';
-        }   
-    }
-    return default_value;
+void set_verbosity_level(unsigned int level) {
+    verbosity_level = level;
 }
 
-void print_lyndon_word(lie_series_t *LS,  size_t i) {
+//void set_max_lookup_table_size(size_t size) {
+//}
+
+void print_word(lie_series_t *LS,  size_t i) {
     if (i<LS->K) {
         printf("%c", (char) ('A'+i));
     }
     else {
-        print_lyndon_word(LS, LS->p1[i]);
-        print_lyndon_word(LS, LS->p2[i]);
+        print_word(LS, LS->p1[i]);
+        print_word(LS, LS->p2[i]);
     }
 }   
 
@@ -1014,7 +975,16 @@ void print_basis_element(lie_series_t *LS,  size_t i) {
         print_basis_element(LS, LS->p2[i]);
         printf("]");
     }
-}   
+}
+
+int get_degree(lie_series_t *LS, size_t i) {
+    if (i<LS->K) {
+        return 1;
+    }
+    else {
+        return get_degree(LS, LS->p1[i])+get_degree(LS, LS->p2[i]);
+    }
+}
 
 #ifdef USE_INT128_T
 void print_INTEGER(__int128_t x) {
@@ -1065,85 +1035,33 @@ void print_lie_series(lie_series_t *LS) {
     }
 }
 
-void print_lists(lie_series_t *LS) {
+void print_lists(lie_series_t *LS, unsigned int what) {
     for (int i=0; i<LS->n_lyndon; i++) {
         INTEGER d = gcd(LS->c[i], LS->denom);
         INTEGER p = LS->c[i]/d;
         INTEGER q = LS->denom/d;
-        printf("%i\t%li\t%li\t%li\t", i, LS->nn[i], LS->p1[i], LS->p2[i]);
-        print_INTEGER(p);
-        printf("/");
-        print_INTEGER(q);
+        if (what & PRINT_INDEX) printf("%i", i);
+        if (what & PRINT_DEGREE) printf("\t%i", get_degree(LS, i));
+        // TODO: if (what & PRINT_MULTI_DEGREE) 
+        if (what & PRINT_FACTORS) printf("\t%li\t%li", LS->p1[i], LS->p2[i]);
+        if (what & PRINT_WORD) {
+            printf("\t");
+            print_word(LS, i);
+        }
+        if (what & PRINT_BASIS_ELEMENT) {
+            printf("\t");
+            print_basis_element(LS, i);
+
+        }
+        if (what & PRINT_COEFFICIENT) {
+            printf("\t");
+            print_INTEGER(p);
+            printf("/");
+            print_INTEGER(q);
+        }
         printf("\n");
     }
 }
 
-int main(int argc, char*argv[]) {
-#ifdef USE_INT128_T
-    size_t N = get_arg(argc, argv, "N", 5, 1, 32);
-#else
-    size_t N = get_arg(argc, argv, "N", 5, 1, 16);
-#endif 
-    size_t M = get_arg(argc, argv, "M", 0, 0, N>20 ? 20 : N);
 
-    expr_t *A = generator(0);
-    expr_t *B = generator(1);
-    expr_t *C = generator(2);
-    expr_t *ex = NULL;
-    lie_series_t LS;
-    switch(get_arg(argc, argv, "expression", 0, 0, 6)) {
-        case 0: 
-            LS = BCH(N, M);
-            break;
-        case 1: 
-            ex = logarithm(product(product(exponential(A), exponential(B)), 
-                                          exponential(A)));
-            LS = lie_series(2, ex, N, 1, M);
-            break;
-        case 2: 
-            LS = symBCH(N, M);
-            break;
-        case 3: 
-            ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
-            LS = lie_series(3, ex, N, 1, M);
-            break;
-        case 4: 
-            ex = logarithm(product(product(exponential(A), exponential(B)),
-                           product(exponential(negation(A)),exponential(negation(B)))));
-            LS = lie_series(2, ex, N, 1, M);
-            break;
-        case 5: 
-            ex = logarithm(product(exponential(A), exponential(B)));
-            LS = lie_series(3, ex, N, 1, M); /* SIC! K=3 */
-            break;
-        case 6: /* same as case 1 but without BCH specific optimizations */
-            ex = logarithm(product(exponential(A), exponential(B)));
-            LS = lie_series(2, ex, N, 1, M); 
-            break;
-    }
 
-    // struct timespec t0, t1;
-    // double t;
-    // clock_gettime(CLOCK_MONOTONIC, &t0);	
-    // clock_gettime(CLOCK_MONOTONIC, &t1);	
-    // t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
-
-    /* output result: */
-    switch(get_arg(argc, argv, "lists_output", N<=10 ? 0 : 1, 0, 1)) {
-        case 0:
-            print_lie_series(&LS);
-            printf("\n");
-            break;
-        case 1:
-            print_lists(&LS);
-            break;
-    }
-
-    free_lie_series(LS);
-    free_expr(A);
-    free_expr(B);
-    free_expr(C);
-    free_expr(ex);
-
-    return EXIT_SUCCESS ;
-}
