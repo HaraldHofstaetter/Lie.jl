@@ -7,33 +7,46 @@
 #include<omp.h>
 
 
-static size_t K;        /* number of generators */
-static size_t N;        /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
-static generator_t **W; /* W[i] ... nth Lyndon word, ordered primarily by length and secondarily
-                           by lexicographical order */
-static size_t *p1;      /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
-static size_t *p2;
-static size_t *nn;      /* nn[i] = length of W[i] */
-static size_t *ii;      /* W[ii[n-1]] = first Lyndon word of length n; 
-                           W[ii[n]-1] = last Lyndon word of length n */
-static size_t *LWI;     /* LWI[i] = word index of W[i] */
-static size_t *MDI;     /* MDI[i] = multi degree index of W[i] */
-static size_t n_lyndon; /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
+static size_t K;             /* number of generators */
+static size_t N;             /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
+static generator_t **W=NULL; /* W[i] ... nth Lyndon word, ordered primarily by length and secondarily
+                                by lexicographical order */
+static size_t *p1=NULL;      /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
+static size_t *p2=NULL;
+static size_t *nn=NULL;      /* nn[i] = length of W[i] */
+static size_t *ii=NULL;      /* W[ii[n-1]] = first Lyndon word of length n; 
+                                W[ii[n]-1] = last Lyndon word of length n */
+static size_t *LWI=NULL;     /* LWI[i] = word index of W[i] */
+static size_t *MDI=NULL;     /* MDI[i] = multi degree index of W[i] */
+static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
 static size_t max_lookup_size;
-static int **LUT;
-static size_t *LUT_D1; /* LUT_D1[i] = number of Lyndon words (Lyndon basis elements) 
-                          which have multi degree index i */
-static size_t *LUT_D2; /* LUT D2[i] = number of all words of length <= max_lookup_size
-                          which have multi degree index i */
-static size_t *LUT_P1; /* Lyndon word W[i] is the LUT_P1[i]-th Lyndon word having 
-                          multi degree index MDI[i] */
-static size_t *LUT_P2; /* Word with index i is the LUT_P2[i]-th word in the list of all words 
-                          having the same multi degree index as the given word with index i */
+static int **LUT=NULL;
+static size_t *LUT_D1=NULL; /* LUT_D1[i] = number of Lyndon words (Lyndon basis elements) 
+                               which have multi degree index i */
+static size_t *LUT_D2=NULL; /* LUT D2[i] = number of all words of length <= max_lookup_size
+                               which have multi degree index i */
+static size_t *LUT_P1=NULL; /* Lyndon word W[i] is the LUT_P1[i]-th Lyndon word having 
+                               multi degree index MDI[i] */
+static size_t *LUT_P2=NULL; /* Word with index i is the LUT_P2[i]-th word in the list of all words 
+                               having the same multi degree index as the given word with index i */
 
 static unsigned int verbosity_level;
-static INTEGER *FACTORIAL;
+static INTEGER *FACTORIAL=NULL;
 
+
+static double tic(void) {
+    struct timespec tt;
+    clock_gettime(CLOCK_MONOTONIC, &tt);	
+    return tt.tv_sec + ((double) tt.tv_nsec)*1e-9;
+}
+
+static double toc(double t0) {
+    struct timespec tt;
+    clock_gettime(CLOCK_MONOTONIC, &tt);	
+    double t1 = tt.tv_sec + ((double) tt.tv_nsec)*1e-9;
+    return t1-t0;
+}
 
 static int ipow(int base, unsigned int exp)
 {
@@ -244,6 +257,7 @@ static void genLW(size_t K, size_t n, size_t t, size_t p[],
 }
 
 static void init_lyndon_words(void) {
+    double t0 = tic();
     size_t nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
@@ -289,6 +303,10 @@ static void init_lyndon_words(void) {
         genLW(K, n, 1, p, a, &wp, split);
     }
     assert(wp==n_lyndon);
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#init Lyndon words: time=%g sec\n", t1);
+    }
 }
 
 static void free_lyndon_words(void) {
@@ -684,6 +702,11 @@ static void gen_ith_word_of_length_n(size_t i, size_t n, generator_t w[]) {
 }
 
 static void init_lookup_table(size_t M) {
+    if (M==0) {
+        max_lookup_size = M;
+        return;
+    }
+    double t0 = tic();
     size_t H = MDI[ii[M]-1]+1; 
     LUT_D1 = calloc(H, sizeof(size_t));
     LUT_P1 = calloc(ii[M], sizeof(size_t));
@@ -748,6 +771,10 @@ static void init_lookup_table(size_t M) {
         }
     }
     max_lookup_size = M;
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#init lookup table: time=%g sec\n", t1);
+    }
 }
 
 static void free_lookup_table(void) {
@@ -771,6 +798,7 @@ static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
 }
 
 static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_specific) {
+    double t0 = tic();
     INTEGER e[N+1];
 
     /* c[0] needs special handling */
@@ -854,6 +882,10 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_s
         }
     }
     }
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#compute lie series: time=%g sec\n", t1);
+    }
 }
 
 /* table den_fac obtained with the following Julia code:
@@ -900,16 +932,22 @@ static lie_series_t gen_result(INTEGER *c, INTEGER denom) {
 }
 
 lie_series_t lie_series(size_t K, expr_t* expr, size_t N, int64_t fac, size_t M) {
+    double t0 = tic();
     init_all(K, N, M);
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N]*fac;
     compute_lie_series(expr, c, denom, 0);
     lie_series_t LS = gen_result(c, denom);
     free_all();
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#total time=%g sec\n", t1);
+    }
     return LS;
 }
 
 lie_series_t BCH(size_t N, size_t M) {
+    double t0 = tic();
     expr_t *A = generator(0);
     expr_t *B = generator(1);
     expr_t *expr = logarithm(product(exponential(A), exponential(B)));
@@ -923,10 +961,15 @@ lie_series_t BCH(size_t N, size_t M) {
     free_expr(A);
     free_expr(B);
     free_expr(expr);
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#total time=%g sec\n", t1);
+    }
     return LS;
 }
 
 lie_series_t symBCH(size_t N, size_t M) {
+    double t0 = tic();
     expr_t *A = generator(0);
     expr_t *halfA = term(1, 2, A);
     expr_t *B = generator(1);
@@ -937,6 +980,10 @@ lie_series_t symBCH(size_t N, size_t M) {
     free_expr(A);
     free_expr(B);
     free_expr(expr);
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#total time=%g sec\n", t1);
+    }
     return LS;
 }
 

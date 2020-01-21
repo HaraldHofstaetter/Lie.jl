@@ -54,7 +54,7 @@ int main(int argc, char*argv[]) {
     size_t N = get_arg(argc, argv, "N", 5, 1, 16);
 #endif 
     size_t M = get_arg(argc, argv, "M", 0, 0, N>20 ? 20 : N);
-    set_verbosity_level(get_arg(argc, argv ,"verbosity_level", 0, 9, 0));
+    set_verbosity_level(get_arg(argc, argv ,"verbosity_level", 0, 0, 9));
 
     expr_t *A = generator(0);
     expr_t *B = generator(1);
@@ -91,12 +91,6 @@ int main(int argc, char*argv[]) {
             LS = lie_series(2, ex, N, 1, M); 
             break;
     }
-
-    // struct timespec t0, t1;
-    // double t;
-    // clock_gettime(CLOCK_MONOTONIC, &t0);	
-    // clock_gettime(CLOCK_MONOTONIC, &t1);	
-    // t = (t1.tv_sec-t0.tv_sec) + ( (double) (t1.tv_nsec - t0.tv_nsec))*1e-9;
 
     /* output result: */
     switch(get_arg(argc, argv, "lists_output", N<=10 ? 0 : 1, 0, 1)) {
