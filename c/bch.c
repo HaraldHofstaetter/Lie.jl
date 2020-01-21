@@ -798,7 +798,12 @@ static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
 }
 
 static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_specific) {
+    if (verbosity_level>=1) {
+        printf("#expression="); print_expr(ex); printf("\n"); 
+        printf("#denominator="); print_INTEGER(denom); printf("\n");
+    }
     double t0 = tic();
+
     INTEGER e[N+1];
 
     /* c[0] needs special handling */
@@ -1083,6 +1088,17 @@ void print_lie_series(lie_series_t *LS) {
 }
 
 void print_lists(lie_series_t *LS, unsigned int what) {
+    if (verbosity_level>=1) {
+        printf("# ");
+        if (what & PRINT_INDEX) printf("i");
+        if (what & PRINT_DEGREE) printf("\t|i|");
+        // TODO: if (what & PRINT_MULTI_DEGREE) 
+        if (what & PRINT_FACTORS) printf("\ti'\ti\"");
+        if (what & PRINT_WORD) printf("\tword");
+        if (what & PRINT_BASIS_ELEMENT) printf("\tbasis element");
+        if (what & PRINT_COEFFICIENT) printf("\tcoefficient"); 
+        printf("\n");
+    }
     for (int i=0; i<LS->n_lyndon; i++) {
         INTEGER d = gcd(LS->c[i], LS->denom);
         INTEGER p = LS->c[i]/d;
