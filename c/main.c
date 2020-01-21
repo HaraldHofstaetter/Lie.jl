@@ -62,31 +62,31 @@ int main(int argc, char*argv[]) {
     expr_t *ex = NULL;
     lie_series_t LS;
     switch(get_arg(argc, argv, "expression", 0, 0, 6)) {
-        case 0: 
+        case 0:  /* log(exp(A)*exp(B)), exploit a priori knowledge about zero coefficients */
             LS = BCH(N, M);
             break;
-        case 1: 
+        case 1: /* log(exp(A)*exp(B)*exp(A)) */
             ex = logarithm(product(product(exponential(A), exponential(B)), 
                                           exponential(A)));
             LS = lie_series(2, ex, N, 1, M);
             break;
         case 2: 
-            LS = symBCH(N, M);
+            LS = symBCH(N, M); /* log(exp(A/2)*exp(B)*exp(A/2) */
             break;
-        case 3: 
+        case 3: /* log(exp(A)*exp(B)*exp(C)), 3 generators */
             ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
             LS = lie_series(3, ex, N, 1, M);
             break;
-        case 4: 
+        case 4: /* log(exp(A)*exp(B)*exp(-A)*exp(-B)) */
             ex = logarithm(product(product(exponential(A), exponential(B)),
                            product(exponential(negation(A)),exponential(negation(B)))));
             LS = lie_series(2, ex, N, 1, M);
             break;
-        case 5: 
+        case 5: /* log(exp(A)*exp(B)) computed in Lie algebra over 3 generators */
             ex = logarithm(product(exponential(A), exponential(B)));
             LS = lie_series(3, ex, N, 1, M); /* SIC! K=3 */
             break;
-        case 6: /* same as case 1 but without BCH specific optimizations */
+        case 6: /* same as case 0 but don't exploit a priori knowledge about zero coefficients */
             ex = logarithm(product(exponential(A), exponential(B)));
             LS = lie_series(2, ex, N, 1, M); 
             break;
@@ -106,7 +106,7 @@ int main(int argc, char*argv[]) {
                 PRINT_FACTORS      *get_arg(argc, argv, "print_factors",       1, 0, 1) |
                 PRINT_WORD         *get_arg(argc, argv, "print_word",          0, 0, 1) |
                 PRINT_BASIS_ELEMENT*get_arg(argc, argv, "print_basis_element", 0, 0, 1) |
-                PRINT_COEFFICIENT  *get_arg(argc, argv, "print_basis_element", 1, 0, 1); 
+                PRINT_COEFFICIENT  *get_arg(argc, argv, "print_coefficient",   1, 0, 1); 
             print_lists(&LS, what);
             break;
         }
@@ -118,5 +118,5 @@ int main(int argc, char*argv[]) {
     free_expr(C);
     free_expr(ex);
 
-    return EXIT_SUCCESS ;
+    return EXIT_SUCCESS;
 }

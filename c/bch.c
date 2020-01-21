@@ -1,3 +1,5 @@
+/* indent -npsl -npcs -br -i4 bch.c */
+
 #include"bch.h"
 #include<stdlib.h>
 #include<stdint.h>
@@ -956,7 +958,6 @@ lie_series_t BCH(size_t N, size_t M) {
     expr_t *A = generator(0);
     expr_t *B = generator(1);
     expr_t *expr = logarithm(product(exponential(A), exponential(B)));
-
     init_all(2, N, M);
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N];
@@ -975,14 +976,22 @@ lie_series_t BCH(size_t N, size_t M) {
 
 lie_series_t symBCH(size_t N, size_t M) {
     double t0 = tic();
-    expr_t *A = generator(0);
-    expr_t *halfA = term(1, 2, A);
+    expr_t *halfA = generator(0);
     expr_t *B = generator(1);
     expr_t *expr = logarithm(product(product(exponential(halfA), exponential(B)), 
                                      exponential(halfA)));
-    int64_t fac = 1ll<<(N-1); /* 2^(N-1) */
-    lie_series_t LS = lie_series(2, expr, N, fac, M);
-    free_expr(A);
+    init_all(2, N, M);
+    INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+    INTEGER denom = FACTORIAL[N]*den_fac[N];
+    compute_lie_series(expr, c, denom, 0);
+    lie_series_t LS = gen_result(c, denom);
+    for (int i=0; i<n_lyndon; i++) {
+        int nA = get_degree_of_generator(&LS, i, 0);
+        LS.c[i] <<= N-1-nA; /* c[i] = c[i]*2^(N-1-nA) */
+    }
+    LS.denom <<= N-1; /* denom = denom*2^(N-1) */
+    free_all();
+    free_expr(halfA);
     free_expr(B);
     free_expr(expr);
     if (verbosity_level>=1) {
@@ -991,6 +1000,7 @@ lie_series_t symBCH(size_t N, size_t M) {
     }
     return LS;
 }
+
 
 void free_lie_series(lie_series_t LS) {
     free(LS.p1);
@@ -1029,14 +1039,6 @@ void print_basis_element(lie_series_t *LS,  size_t i) {
     }
 }
 
-int get_degree(lie_series_t *LS, size_t i) {
-    if (i<LS->K) {
-        return 1;
-    }
-    else {
-        return get_degree(LS, LS->p1[i])+get_degree(LS, LS->p2[i]);
-    }
-}
 
 #ifdef USE_INT128_T
 void print_INTEGER(__int128_t x) {
@@ -1087,12 +1089,31 @@ void print_lie_series(lie_series_t *LS) {
     }
 }
 
+int get_degree(lie_series_t *LS, size_t i) {
+    if (i<LS->K) {
+        return 1;
+    }
+    else {
+        return get_degree(LS, LS->p1[i])+get_degree(LS, LS->p2[i]);
+    }
+}
+
+int get_degree_of_generator(lie_series_t *LS, size_t i, uint8_t g) {
+    if (i<LS->K) {
+        return i==g ? 1 : 0;
+    }
+    else {
+        return get_degree_of_generator(LS, LS->p1[i], g)
+              +get_degree_of_generator(LS, LS->p2[i], g);
+    }
+}
+
 void print_lists(lie_series_t *LS, unsigned int what) {
     if (verbosity_level>=1) {
         printf("# ");
         if (what & PRINT_INDEX) printf("i");
         if (what & PRINT_DEGREE) printf("\t|i|");
-        // TODO: if (what & PRINT_MULTI_DEGREE) 
+        if (what & PRINT_MULTI_DEGREE) printf("\tmulti degree"); 
         if (what & PRINT_FACTORS) printf("\ti'\ti\"");
         if (what & PRINT_WORD) printf("\tword");
         if (what & PRINT_BASIS_ELEMENT) printf("\tbasis element");
@@ -1105,7 +1126,13 @@ void print_lists(lie_series_t *LS, unsigned int what) {
         INTEGER q = LS->denom/d;
         if (what & PRINT_INDEX) printf("%i", i);
         if (what & PRINT_DEGREE) printf("\t%i", get_degree(LS, i));
-        // TODO: if (what & PRINT_MULTI_DEGREE) 
+        if (what & PRINT_MULTI_DEGREE) {
+            printf("\t(%i", get_degree_of_generator(LS, i, 0));
+            for (int g=1; g<LS->K; g++) {
+                printf(",%i", get_degree_of_generator(LS, i, g));
+            }
+            printf(")");
+        }
         if (what & PRINT_FACTORS) printf("\t%li\t%li", LS->p1[i], LS->p2[i]);
         if (what & PRINT_WORD) {
             printf("\t");

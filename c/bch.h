@@ -68,7 +68,8 @@ enum {
 };
 
 void print_lists(lie_series_t *LS, unsigned int what);
-
+int get_degree(lie_series_t *LS, size_t i);
+int get_degree_of_generator(lie_series_t *LS, size_t i, uint8_t g);
 void print_word(lie_series_t *LS,  size_t i);
 void print_basis_element(lie_series_t *LS,  size_t i);
 void print_INTEGER(INTEGER x);
