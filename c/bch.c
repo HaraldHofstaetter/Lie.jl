@@ -307,6 +307,7 @@ static void init_lyndon_words(void) {
     assert(wp==n_lyndon);
     if (verbosity_level>=1) {
         double t1 = toc(t0);
+        printf("#number of Lyndon words of length<=%li over set of %li letters: %li\n", N, K, n_lyndon);
         printf("#init Lyndon words: time=%g sec\n", t1);
     }
 }
@@ -803,6 +804,13 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_s
     if (verbosity_level>=1) {
         printf("#expression="); print_expr(ex); printf("\n"); 
         printf("#denominator="); print_INTEGER(denom); printf("\n");
+        printf("#divisibility checks are "
+#ifdef NO_DIVISIBILITY_CHECKS    
+            "off"
+#else
+            "on"
+#endif
+        "\n");
     }
     double t0 = tic();
 
@@ -983,6 +991,9 @@ lie_series_t symBCH(size_t N, size_t M) {
     init_all(2, N, M);
     INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N];
+    if (verbosity_level>=1) {
+        printf("#NOTE: in the following expression, A stands for A/2\n");
+    }
     compute_lie_series(expr, c, denom, 0);
     lie_series_t LS = gen_result(c, denom);
     for (int i=0; i<n_lyndon; i++) {
@@ -990,6 +1001,9 @@ lie_series_t symBCH(size_t N, size_t M) {
         LS.c[i] <<= N-1-nA; /* c[i] = c[i]*2^(N-1-nA) */
     }
     LS.denom <<= N-1; /* denom = denom*2^(N-1) */
+    if (verbosity_level>=1) {
+        printf("#denominator changed to "); print_INTEGER(LS.denom); printf("\n");
+    }
     free_all();
     free_expr(halfA);
     free_expr(B);

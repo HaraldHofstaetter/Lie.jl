@@ -2,7 +2,7 @@
 #define BCH_H
 
 #include<stdint.h>
-#include <stddef.h>
+#include<stddef.h>
 
 #ifdef USE_INT128_T
 typedef __int128_t INTEGER; 
@@ -36,7 +36,6 @@ expr_t* commutator(expr_t* arg1, expr_t* arg2);
 
 void print_expr(expr_t* ex);
 void free_expr(expr_t* ex);
-
 
 typedef struct lie_series_t {
     size_t K;

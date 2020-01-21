@@ -65,13 +65,13 @@ int main(int argc, char*argv[]) {
         case 0:  /* log(exp(A)*exp(B)), exploit a priori knowledge about zero coefficients */
             LS = BCH(N, M);
             break;
-        case 1: /* log(exp(A)*exp(B)*exp(A)) */
-            ex = logarithm(product(product(exponential(A), exponential(B)), 
-                                          exponential(A)));
-            LS = lie_series(2, ex, N, 1, M);
-            break;
-        case 2: 
+        case 1: 
             LS = symBCH(N, M); /* log(exp(A/2)*exp(B)*exp(A/2) */
+            break;
+        case 2: /* log(exp(A)*exp(B)*exp(A)) */
+            ex = logarithm(product(product(exponential(A), exponential(B)), 
+                                   exponential(A)));
+            LS = lie_series(2, ex, N, 1, M);
             break;
         case 3: /* log(exp(A)*exp(B)*exp(C)), 3 generators */
             ex = logarithm(product(product(exponential(A), exponential(B)), exponential(C)));
@@ -86,7 +86,7 @@ int main(int argc, char*argv[]) {
             ex = logarithm(product(exponential(A), exponential(B)));
             LS = lie_series(3, ex, N, 1, M); /* SIC! K=3 */
             break;
-        case 6: /* same as case 0 but don't exploit a priori knowledge about zero coefficients */
+        case 6: /* same as case 0 but doesn't exploit a priori knowledge about zero coefficients */
             ex = logarithm(product(exponential(A), exponential(B)));
             LS = lie_series(2, ex, N, 1, M); 
             break;
