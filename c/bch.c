@@ -6,8 +6,9 @@
 #include<stdio.h>
 #include<assert.h>
 #include<time.h>
-#include<omp.h>
-
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 static size_t K;             /* number of generators */
 static size_t N;             /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
@@ -38,15 +39,23 @@ static INTEGER *FACTORIAL=NULL;
 
 
 static double tic(void) {
+#ifdef _OPENMP
+    return omp_get_wtime();
+#else
     struct timespec tt;
     clock_gettime(CLOCK_MONOTONIC, &tt);	
     return tt.tv_sec + ((double) tt.tv_nsec)*1e-9;
+#endif
 }
 
 static double toc(double t0) {
+#ifdef _OPENMP
+    double t1 = omp_get_wtime();
+#else
     struct timespec tt;
     clock_gettime(CLOCK_MONOTONIC, &tt);	
     double t1 = tt.tv_sec + ((double) tt.tv_nsec)*1e-9;
+#endif
     return t1-t0;
 }
 
@@ -170,8 +179,7 @@ static unsigned int binomial(unsigned int n, unsigned int k) {
     nn++;
     uint64_t rr = 2;
     while (rr <= k) {
-        x = (x*nn) / rr;  /* TODO: detect possible overflow 
-                             (cannot occur with reasonable parameters for BCH) */
+        x = (x*nn) / rr;  
         rr++;
         nn++;
     }
@@ -1135,9 +1143,6 @@ void print_lists(lie_series_t *LS, unsigned int what) {
         printf("\n");
     }
     for (int i=0; i<LS->n_lyndon; i++) {
-        INTEGER d = gcd(LS->c[i], LS->denom);
-        INTEGER p = LS->c[i]/d;
-        INTEGER q = LS->denom/d;
         if (what & PRINT_INDEX) printf("%i", i);
         if (what & PRINT_DEGREE) printf("\t%i", get_degree(LS, i));
         if (what & PRINT_MULTI_DEGREE) {
@@ -1158,6 +1163,9 @@ void print_lists(lie_series_t *LS, unsigned int what) {
 
         }
         if (what & PRINT_COEFFICIENT) {
+            INTEGER d = gcd(LS->c[i], LS->denom);
+            INTEGER p = LS->c[i]/d;
+            INTEGER q = LS->denom/d;
             printf("\t");
             print_INTEGER(p);
             printf("/");
