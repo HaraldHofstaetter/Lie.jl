@@ -23,11 +23,11 @@ static size_t *LWI=NULL;     /* LWI[i] = word index of W[i] */
 static size_t *MDI=NULL;     /* MDI[i] = multi degree index of W[i] */
 static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
-static size_t max_lookup_size;
+static size_t max_lookup_length;
 static int **LUT=NULL;
 static size_t *LUT_D1=NULL; /* LUT_D1[i] = number of Lyndon words (Lyndon basis elements) 
                                which have multi degree index i */
-static size_t *LUT_D2=NULL; /* LUT D2[i] = number of all words of length <= max_lookup_size
+static size_t *LUT_D2=NULL; /* LUT D2[i] = number of all words of length <= max_lookup_length
                                which have multi degree index i */
 static size_t *LUT_P1=NULL; /* Lyndon word W[i] is the LUT_P1[i]-th Lyndon word having 
                                multi degree index MDI[i] */
@@ -670,7 +670,7 @@ static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D2I[
     }
 
     size_t wi = W2I[l + r*N];
-    if (r-l+1<=max_lookup_size) {  /* use lookup table */
+    if (r-l+1<=max_lookup_length) {  /* use lookup table */
         return LUT[di][LUT_P1[j] + LUT_P2[wi]*LUT_D1[di]];
     }
 
@@ -714,7 +714,7 @@ static void gen_ith_word_of_length_n(size_t i, size_t n, generator_t w[]) {
 
 static void init_lookup_table(size_t M) {
     if (M==0) {
-        max_lookup_size = M;
+        max_lookup_length = M;
         return;
     }
     double t0 = tic();
@@ -751,7 +751,7 @@ static void init_lookup_table(size_t M) {
         size_t i1 = ii[n-1];
         size_t i2 = ii[n]-1;
 
-        max_lookup_size = n-1;
+        max_lookup_length = n-1;
 
         #pragma omp parallel 
         {
@@ -781,9 +781,10 @@ static void init_lookup_table(size_t M) {
         }
         }
     }
-    max_lookup_size = M;
+    max_lookup_length = M;
     if (verbosity_level>=1) {
         double t1 = toc(t0);
+        printf("#lookup table for word lengths<=%li\n", M);
         printf("#init lookup table: time=%g sec\n", t1);
     }
 }
@@ -928,12 +929,12 @@ den_fac = [div(D[i],F[i]) for i=1:n]
 static int den_fac[33] = {1, 1, 1, 2, 1, 6, 2, 6, 3, 10, 2, 6, 2, 210, 30, 12, 3, 30, 10, 
                           210, 42, 330, 30, 60, 30, 546, 42, 28, 2, 60, 4, 924, 231};
 
-static void init_all(size_t number_of_generators, size_t order, size_t max_lookup_size) {
+static void init_all(size_t number_of_generators, size_t order, size_t max_lookup_length) {
     K = number_of_generators;
     N = order;
     init_factorial();
     init_lyndon_words();
-    init_lookup_table(max_lookup_size);
+    init_lookup_table(max_lookup_length);
 }
 
 static void free_all(void) {
@@ -1035,7 +1036,7 @@ void set_verbosity_level(unsigned int level) {
     verbosity_level = level;
 }
 
-//void set_max_lookup_table_size(size_t size) {
+//void set_max_lookup_table_length(size_t size) {
 //}
 
 void print_word(lie_series_t *LS,  size_t i) {
