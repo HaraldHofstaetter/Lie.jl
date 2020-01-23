@@ -61,7 +61,8 @@ static double toc(double t0) {
 
 static int ipow(int base, unsigned int exp)
 {
-    /* METHOD: see https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
+    /* computes base^exp 
+     * METHOD: see https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
      */
     int result = 1;
     for (;;)
@@ -77,6 +78,9 @@ static int ipow(int base, unsigned int exp)
 }
 
 static INTEGER gcd(INTEGER a, INTEGER b) {
+    /* greatest common divisor of a and b
+     * METHOD: Euclid's classical algorithm
+     */
     while (b!=0) {
        INTEGER t = b; 
        b = a%b; 
@@ -159,7 +163,8 @@ static size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
 }
 
 static unsigned int binomial(unsigned int n, unsigned int k) {
-    /* METHOD: from Julia base library, see
+    /* binomial coefficient n over k
+     * METHOD: from Julia base library, see
      * https://github.com/JuliaLang/julia/blob/master/base/intfuncs.jl     
      */ 
     if (k < 0 || k > n ) {
@@ -809,7 +814,7 @@ static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
     return k;
 }
 
-static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_specific) {
+static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int shortcut_for_classical_bch) {
     if (verbosity_level>=1) {
         printf("#expression="); print_expr(ex); printf("\n"); 
         printf("#denominator="); print_INTEGER(denom); printf("\n");
@@ -868,7 +873,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int bch_s
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
             if (MDI[i]==h) {
-                if (bch_specific && !(N%2) && p1[i]!=0) {
+                if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                     c[i] = 0;
                     continue;
                 }
