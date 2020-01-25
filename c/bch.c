@@ -24,7 +24,12 @@ static size_t *MDI=NULL;     /* MDI[i] = multi degree index of W[i] */
 static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
 static size_t max_lookup_length;
-static int **LUT=NULL;
+static int **LUT=NULL;      /* precomputed lookup table: word with index i and multi-degree 
+                             * index md has coefficient
+                             *      LUT[md][[LUT_P1[j] + LUT_P2[i]*LUT_D1[md]]
+                             * in basis element with number j. 
+                             * Basis element j and word i are assumed to have the same 
+                             * multi-degree md and degree (=length) <= max_lookup_length */
 static size_t *LUT_D1=NULL; /* LUT_D1[i] = number of Lyndon words (Lyndon basis elements) 
                                which have multi degree index i */
 static size_t *LUT_D2=NULL; /* LUT D2[i] = number of all words of length <= max_lookup_length
@@ -59,8 +64,7 @@ static double toc(double t0) {
     return t1-t0;
 }
 
-static int ipow(int base, unsigned int exp)
-{
+static int ipow(int base, unsigned int exp) {
     /* computes base^exp 
      * METHOD: see https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
      */
@@ -78,7 +82,7 @@ static int ipow(int base, unsigned int exp)
 }
 
 static INTEGER gcd(INTEGER a, INTEGER b) {
-    /* greatest common divisor of a and b
+    /* computes greatest common divisor of a and b
      * METHOD: Euclid's classical algorithm
      */
     while (b!=0) {
@@ -134,6 +138,10 @@ static void number_of_lyndon_words(generator_t K, size_t N, size_t nLW[N]) {
 }
 
 static size_t word_index(size_t K, generator_t w[], size_t l, size_t r) {
+    /* computes the index of the subword w[l:r] of w starting at position l and
+     * ending at position r. The index is given as w[l:r] interpreted as a K-adic
+     * number plus the number (K^n-1)/(K-1)-1 of words of length < n, where 
+     * n = r-l+1 = length of w[l:r] */
     size_t x = 0;
     size_t y = 1;
     for (int j=r; j>= (signed) l; j--) { /* CAUTION! comparison between signed and unsigned */
@@ -144,7 +152,10 @@ static size_t word_index(size_t K, generator_t w[], size_t l, size_t r) {
 }
 
 static size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
-    /* METHOD: binary search
+    /* finds index wi in the list of indices LWI. Start search at position l and stop
+     * it at position r. This function is only applied in situations where the search
+     * does not fail.
+     * METHOD: binary search
      */
     while (l<=r) {
         size_t m = l + (r-l)/2;
@@ -163,7 +174,7 @@ static size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
 }
 
 static unsigned int binomial(unsigned int n, unsigned int k) {
-    /* binomial coefficient n over k
+    /* computes binomial coefficient n over k
      * METHOD: from Julia base library, see
      * https://github.com/JuliaLang/julia/blob/master/base/intfuncs.jl     
      */ 
@@ -668,7 +679,13 @@ static void phi(INTEGER y[], size_t n, generator_t w[], expr_t* ex, INTEGER v[])
 }
 
 static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D2I[], size_t W2I[]) { 
-    
+    /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
+     * with number j.
+     * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
+     * of a word w which is given only implicitely.
+     * D2I is a table of multi degree indices such that D2I[l'+r'*N] is the multi degree index
+     * of w[l':r']. 
+     */
     size_t di = D2I[l + r*N];
     if (di != MDI[j]) {
         return 0;  /* multi-degrees don't match */
