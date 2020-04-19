@@ -13,26 +13,23 @@
 static size_t K;             /* number of generators */
 static size_t N;             /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
 static generator_t **W=NULL; /* W[i] ... nth Lyndon word, ordered primarily by length and secondarily
-                                by lexicographical order */
-static uint32_t *p1=NULL;      /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
+                               by lexicographical order */
+static uint32_t *p1=NULL;   /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
 static uint32_t *p2=NULL;
-static uint8_t *nn=NULL;      /* nn[i] = length of W[i] */
-static uint32_t *ii=NULL;      /* W[ii[n-1]] = first Lyndon word of length n; 
-                                W[ii[n]-1] = last Lyndon word of length n */
-static uint32_t *LWI=NULL;     /* LWI[i] = word index of W[i] */
-static uint32_t *MDI=NULL;     /* MDI[i] = multi degree index of W[i] */
+static uint8_t  *nn=NULL;    /* nn[i] = length of W[i] */
+static uint32_t *ii=NULL;    /* W[ii[n-1]] = first Lyndon word of length n; 
+                               W[ii[n]-1] = last Lyndon word of length n */
+static uint32_t *WI=NULL;  /* WI[i] = word index of W[i] */
+static uint32_t *DI=NULL;  /* DI[i] = multi degree index of W[i] */
 
-//static int8_t *AD=NULL;      /* if AD[i]>0 then i-th basis element is of the form [[...[[A,B],B], ...],B] with 
-//                                AD[i] = number of B's;
-//                                if AD[i]<0 then i-th basis element is of the form [A,[...,[A,[A,b]]..]] with
-//                                |AD[i]| = number_of B's, and b is basis element with index IMB[i] */
-//static size_t *IMB=NULL;
 
-static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
+static size_t n_lyndon;     /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
 static size_t M;            /* maximum lookup length */ 
 
-static int **T = NULL;
+static int **T = NULL;      /* precomputed lookup table: word with index i 
+                             *      T[i][T_P[j]]
+                             * in basis element with number j.  */
 static uint32_t *T_P = NULL;
 
 #if 0
@@ -52,14 +49,13 @@ static uint32_t *T_D1=NULL; /* T_D1[i] = number of Lyndon words (Lyndon basis el
 static uint32_t *T_D2=NULL; /* T D2[i] = number of all words of length <= M
                                which have multi degree index i */
 static uint32_t *T_P1=NULL; /* Lyndon word W[i] is the T_P1[i]-th Lyndon word having 
-                               multi degree index MDI[i] */
+                               multi degree index DI[i] */
 static uint32_t *T_P2=NULL; /* Word with index i is the T_P2[i]-th word in the list of all words 
                                having the same multi degree index as the given word with index i */
 #endif
 
 static unsigned int verbosity_level;
 static INTEGER *FACTORIAL=NULL;
-//static int *SBINOMIAL=NULL;
 
 
 static double tic(void) {
@@ -186,17 +182,17 @@ static size_t word_index(size_t K, generator_t w[], size_t l, size_t r) {
 }
 
 static size_t find_lyndon_word_index(size_t l, size_t r, size_t wi) {
-    /* finds index wi in the sorted list of indices LWI. Start search at position l 
+    /* finds index wi in the sorted list of indices WI. Start search at position l 
      * and stop * it at position r. This function is only applied in situations where 
      * the search will not fail.
      * METHOD: binary search
      */
     while (l<=r) {
         size_t m = l + (r-l)/2;
-        if (LWI[m]==wi) {
+        if (WI[m]==wi) {
             return m;
         }
-        if (LWI[m]<wi) {
+        if (WI[m]<wi) {
             l = m+1;
         }
         else {
@@ -263,33 +259,38 @@ static size_t multi_degree_index(size_t K, generator_t w[], size_t l, size_t r) 
     return tuple(K, h); 
 }
 
-
-static void gen_D2I_W2I(size_t K, size_t N, generator_t w[], size_t D2I[], size_t W2I[]) {
+static void gen_D(size_t K, size_t N, generator_t w[], size_t D[]) {
     size_t h[K];
     for (int r=N-1; r>=0; r--) {
-        int x = 0;
-        int y = 1;
         for (int j=0; j<K; j++) {
             h[j] = 0;
         }
+        for (int l=r; l>=0; l--) {
+            h[w[l]]++;
+            D[l + r*N] = tuple(K, h);
+        }
+    }
+}
+
+
+static void gen_TWI(size_t K, size_t N, size_t M, generator_t w[], int **TWI) {
+    for (int r=N-1; r>=0; r--) {
+        int x = 0;
+        int y = 1;
         if (K==2) {
-            for (int l=r; l>=0; l--) {
+            for (int l=r; l>=0 && l>r-(signed) M; l--) {
                 x += w[l]*y;
                 y <<= 1;
-                W2I[l + r*N] = x + y - 2; 
-                h[w[l]]++;
-                D2I[l + r*N] = tuple(K, h);
+                TWI[l + r*N] = T[x + y - 2]; 
             }
         }
         else {
             int os = 0;
-            for (int l=r; l>=0; l--) {
+            for (int l=r; l>=0 && l>r-(signed) M; l--) {
                 x += w[l]*y;
                 y *= K;
-                W2I[l + r*N] = x + os; 
+                TWI[l + r*N] = T[x + os]; 
                 os += y;
-                h[w[l]]++;
-                D2I[l + r*N] = tuple(K, h);
             }
         }
     }
@@ -343,8 +344,8 @@ static void genLW(size_t K, size_t n, size_t t, size_t p, generator_t a[], size_
                 for (int i=0; i<n0; i++) {
                     W[j][i] = a[i+h+1];
                 }
-                LWI[j] = word_index(K, a, h+1, n);
-                MDI[j] = multi_degree_index(K, a, h+1, n);
+                WI[j] = word_index(K, a, h+1, n);
+                DI[j] = multi_degree_index(K, a, h+1, n);
                 if (n0>1) {
                     if (h<H) {
                         p1[j] = 0;
@@ -359,28 +360,6 @@ static void genLW(size_t K, size_t n, size_t t, size_t p, generator_t a[], size_
                         p1[j] = find_lyndon_word_index(ii[n1-1], wp[n1-1], wi1);
                         p2[j] = find_lyndon_word_index(ii[n2-1], wp[n2-1], wi2);
                     }
-/*                
-                AD[*wp] = 0;
-                IMB[*wp] = 0;
-                if (p2[*wp]==1) {
-                    if (p1[*wp]==0) {
-                        AD[*wp] = 1;
-                    }
-                    else if (AD[p1[*wp]]>0) {
-                        AD[*wp] = AD[p1[*wp]]+1;
-                    }
-                }
-                if (p1[*wp]==0) {
-                    if (AD[p2[*wp]]<0) {
-                        AD[*wp] = AD[p2[*wp]]-1;
-                        IMB[*wp] = IMB[p2[*wp]];
-                    }
-                    else {
-                        AD[*wp] = -1;
-                        IMB[*wp] = p2[*wp];
-                    }
-                }
-*/                
                 }
                 j2 = j;
                 wp[n0-1]++;
@@ -411,10 +390,8 @@ static void init_lyndon_words(void) {
     p1 = malloc(n_lyndon*sizeof(uint32_t)); 
     p2 = malloc(n_lyndon*sizeof(uint32_t)); 
     nn = malloc(n_lyndon*sizeof(uint8_t)); 
-    LWI = malloc(n_lyndon*sizeof(uint32_t));
-    MDI = malloc(n_lyndon*sizeof(uint32_t));
-    //AD = malloc(n_lyndon*sizeof(int8_t));
-    //IMB = malloc(n_lyndon*sizeof(size_t));
+    WI = malloc(n_lyndon*sizeof(uint32_t));
+    DI = malloc(n_lyndon*sizeof(uint32_t));
     ii = malloc((N+1)*sizeof(uint32_t)); 
     W[0] = malloc(mem_len*sizeof(generator_t)); 
     ii[0] = 0;
@@ -433,8 +410,6 @@ static void init_lyndon_words(void) {
     for (int i=0; i<K; i++) {
         p1[i] = i;
         p2[i] = 0;
-        // AD[i] = 0;
-        // IMB[i] = i;
     }
 
     generator_t a[N+1];
@@ -444,8 +419,8 @@ static void init_lyndon_words(void) {
     }
     wp[0] = 1;
     W[0][0] = 0;
-    LWI[0] = 0;
-    MDI[0] = 1;
+    WI[0] = 0;
+    DI[0] = 1;
 
     for (int i=0; i<=N; i++) {
         a[i] = 0; 
@@ -453,36 +428,6 @@ static void init_lyndon_words(void) {
 
     genLW(K, N, 1, 1, a, wp);
     
-
-/*    
-    for (int i=K; i<n_lyndon; i++) {
-        AD[i] = 0;
-        IMB[i] = 0;
-
-        if (p1[i]==0) {
-            if (AD[p2[i]]<0) {
-                AD[i] = AD[p2[i]]-1;
-                IMB[i] = IMB[p2[i]];
-            }
-            else {
-                AD[i] = -1;
-                IMB[i] = p2[i];
-            }
-        }
-    }
-
-    for (int i=K ; i<n_lyndon; i++) {
-       if (p2[i]==1) {
-            if (p1[i]==0) {
-                AD[i] = 1;
-            }
-            else if (AD[p1[i]]>0) {
-                AD[i] = AD[p1[i]]+1;
-            }
-        }
-    }
-*/    
-
     if (verbosity_level>=1) {
         double t1 = toc(t0);
         printf("#number of Lyndon words of length<=%li over set of %li letters: %li\n", N, K, n_lyndon);
@@ -495,10 +440,8 @@ static void free_lyndon_words(void) {
     free(W);
     free(nn);
     free(ii);
-    free(LWI);
-    free(MDI);
-    //free(AD);
-    //free(IMB);
+    free(WI);
+    free(DI);
     /* Note: p1 and p2 are taken over by a lie_series_t struct
        and are eventually freed by free_lie_series */
 }
@@ -509,22 +452,10 @@ static void init_factorial(void) {
     for (int n=1; n<=N; n++) {
         FACTORIAL[n] = n*FACTORIAL[n-1];
     }
-/*
-    SBINOMIAL = malloc((N+1)*(N+1)*sizeof(int)); 
-    for (int n=0; n<=N; n++) {
-        for (int k=0; k<=n; k++) {
-            SBINOMIAL[n*(N+1)+k] = (k&1 ? -1 : 1 )*binomial(n, k);
-        }
-        for (int k=n+1; k<=N; k++) {
-            SBINOMIAL[n*(N+1)+k] = 0;
-        }
-    }
-*/    
 }
 
 static void free_factorial(void) {
     free(FACTORIAL);
-//    free(SBINOMIAL);
 }
 
 
@@ -867,70 +798,43 @@ int phi(INTEGER y[], int m, generator_t w[], expr_t* ex, INTEGER v[]) {
     }
 }
 
-//static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D2I[], size_t W2I[]) { //, int FA[]) { 
-static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D2I[], int **TW2I) { //, int FA[]) { 
+static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D[], int **TWI) {  
     /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
      * with number j.
      * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
      * of a word w which is given only implicitely.
-     * D2I is a table of multi degree indices such that D2I[l'+r'*N] is the multi degree index
+     * D is a table of multi degree indices such that D[l'+r'*N] is the multi degree index
      * of w[l':r']. 
      */
-    //size_t di = D2I[l + r*N];
-    //if (di != MDI[j]) {
-    //    return 0;  /* multi-degrees don't match */
-    //}
+    int n=r-l+1;
 
-    if (r-l+1<=M) {  /* use lookup table */
-        return TW2I[l + r*N][T_P[j]]; 
-/*
-        size_t wi = W2I[l + r*N];
-#if (LOOKUP_ORDER==0)        
-        return T[wi][T_P[j]];
-#else
-        return T[j][T_P[wi]]; 
-#endif
-*/
+    if (n==1) {
+        return DI[j]==D[l + r*N];
     }
 
- // commented out: lookup more expensive than shortcut savings
- /*
-    if (r-l+1<=5) { 
-        size_t wi = W2I[l + r*N];
-        size_t wj = LWI[j];
-        if (wi < wj) {
-            return 0;
-        }
-        if (wi == wj) {
-            return 1;
-        }
+    if (n<=M) {  /* use lookup table */
+        return TWI[l + r*N][T_P[j]]; 
     }
-*/
-/*    
-    if (AD[j] > 0) { // (int) M+4) {
-        return FA[l+r*N]; 
-    }
-*/
 
     size_t j1 = p1[j];
     size_t j2 = p2[j];
     size_t m1 = nn[j1];
     size_t m2 = r-l+1-m1;
 
-    int mi = MDI[j1];
+    int mi = DI[j1];
     int c2 = 0;
-    if (D2I[l+m2 + r*N] == mi) {
-        c2 = coeff_word_in_basis_element(l+m2, r, j1, D2I, TW2I); //, FA);
+    if (D[l+m2 + r*N] == mi) {
+        c2 = coeff_word_in_basis_element(l+m2, r, j1, D, TWI); 
         if (c2!=0) {
-            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D2I, TW2I); //, FA);
+            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D, TWI); 
         }
     }
 
     int c1 = 0;
-    if (D2I[l + (l+m1-1)*N] == mi) {
-        c1 = coeff_word_in_basis_element(l+m1, r, j2, D2I, TW2I); //, FA);
+    if (D[l + (l+m1-1)*N] == mi) {
+        c1 = coeff_word_in_basis_element(l+m1, r, j2, D, TWI); 
         if (c1!=0) {
-            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D2I, TW2I); //, FA);
+            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D, TWI); 
         }
     }
 
@@ -975,12 +879,12 @@ static void init_lookup_table() {
     }
     
     double t0 = tic();
-    size_t H = MDI[ii[M]-1]+1; 
+    size_t H = DI[ii[M]-1]+1; 
     uint32_t *T_D1 = calloc(H, sizeof(uint32_t));
     uint32_t *T_P1 = calloc(ii[M], sizeof(uint32_t));
     for (int i=0; i<ii[M]; i++) {
-        T_P1[i] = T_D1[MDI[i]];
-        T_D1[MDI[i]]++;
+        T_P1[i] = T_D1[DI[i]];
+        T_D1[DI[i]]++;
     }
     uint32_t *T_D2 = calloc(H, sizeof(uint32_t));
     uint32_t *T_P2 = calloc((ipow(K, M+1)-1)/(K-1)-1, sizeof(uint32_t));
@@ -1020,14 +924,14 @@ static void init_lookup_table() {
 #else
     T = calloc(ii[M], sizeof(int*));
     for (int j=0; j<ii[M]; j++) {
-        int di = MDI[j];
+        int di = DI[j];
         T[j] = T0[di] + T_P1[j]*T_D2[di];
     }
 #endif
     
     /* case n=1: */
     for (int j=0; j<K; j++) {
-        uint32_t di =  MDI[j];
+        uint32_t di =  DI[j];
         T0[di][T_P1[j] + T_P2[j]*T_D1[di]] = 1;
     }
 
@@ -1046,9 +950,9 @@ static void init_lookup_table() {
             int Kn2 = ipow(K, n2);
             int os1 = (Kn1-1)/(K-1)-1;
             int os2 = (Kn2-1)/(K-1)-1;
-            uint32_t di = MDI[j];
-            uint32_t di1 = MDI[j1];
-            uint32_t di2 = MDI[j2];
+            uint32_t di = DI[j];
+            uint32_t di1 = DI[j1];
+            uint32_t di2 = DI[j2];
             int y1 = T_D2[di1];
             int y2 = T_D2[di2];
 #if (LOOKUP_ORDER==0)        
@@ -1058,7 +962,7 @@ static void init_lookup_table() {
             int *L = T0[di]+T_P1[j];
             int *L1 = T0[di1]+T_P1[j1];
             int *L2 = T0[di2]+T_P1[j2];
-            for (int i1=FWD[di1]; i1<=LWI[j1]; i1++) {
+            for (int i1=FWD[di1]; i1<=WI[j1]; i1++) {
                 if (WDI[i1+os1]==di1) {
                     int i = T_P2[i1*Kn2+FWD[di2]+os];
                     int c1 = L1[T_P2[i1+os1]*x1];
@@ -1075,7 +979,7 @@ static void init_lookup_table() {
                     }
                 }
             }
-            for (int i2=FWD[di2]; i2<=LWI[j2]; i2++) {
+            for (int i2=FWD[di2]; i2<=WI[j2]; i2++) {
                 if (WDI[i2+os2]==di2) {
                     int i = T_P2[i2*Kn1+FWD[di1]+os];
                     int c2 = L2[T_P2[i2+os2]*x2];
@@ -1097,7 +1001,7 @@ static void init_lookup_table() {
             int *L = T0[di]+T_P1[j]*y;
             int *L1 = T0[di1]+T_P1[j1]*y1;
             int *L2 = T0[di2]+T_P1[j2]*y2;
-            for (int i1=FWD[di1]; i1<=LWI[j1]; i1++) {
+            for (int i1=FWD[di1]; i1<=WI[j1]; i1++) {
                 if (WDI[i1+os1]==di1) {
                     int i = T_P2[i1*Kn2+FWD[di2]+os];
                     int c1 = L1[T_P2[i1+os1]];
@@ -1110,7 +1014,7 @@ static void init_lookup_table() {
                     }
                 }
             }
-            for (int i2=FWD[di2]; i2<=LWI[j2]; i2++) {
+            for (int i2=FWD[di2]; i2<=WI[j2]; i2++) {
                 if (WDI[i2+os2]==di2) {
                     int i = T_P2[i2*Kn1+FWD[di1]+os];
                     int c2 = L2[T_P2[i2+os2]];
@@ -1196,22 +1100,14 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t i1 = ii[N-1];
     size_t i2 = ii[N]-1;
 
-    size_t h1 = MDI[i1];
-    size_t h2 = MDI[i2];
+    size_t h1 = DI[i1];
+    size_t h2 = DI[i2];
 
     #pragma omp parallel 
     {
-    size_t D2I[N*N];
-    size_t W2I[N*N];
-    int *TW2I[N*N];
-    //int FA[N*N];
+    size_t D[N*N];
+    int *TWI[N*N];
     
-    for(int l=0; l<=N*N; l++) {
-        D2I[l] = 0;
-        W2I[l] = 0;
-        //FA[l] = 0;
-    }
-
     size_t JW[N];
     size_t JB[N];
     INTEGER t[N+1];
@@ -1225,7 +1121,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     for (int h=h1; h<=h2; h++) {
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
-            if (MDI[i]==h) {
+            if (DI[i]==h) {
                 if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                     c[i] = 0;
                     continue;
@@ -1241,29 +1137,16 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 for (int k=0; k<=kW; k++) {
                     c[JW[k]] = k<m ? t[k] : 0;
                 }
-                /*
-                for (int l=0; l<N; l++) {
-                    for (int r=l; r<N; r++) {
-                        FA[l + r*N] = first_A(w, l, r); 
-                    }
-                }
-                */
-                gen_D2I_W2I(K, N, w, D2I, W2I);
-                for (int p=0; p<N; p++) {
-                    for (int q=p; q<p+M && q<N; q++) {
-                        TW2I[p + q*N] = T[W2I[p + q*N]];
-                    }
-                }
+
+                gen_D(K, N, w, D);
+                gen_TWI(K, N, M, w, TWI);
 
                 for (int j=j1; j<=i-1; j++) {
-                    if (MDI[j]==h) {
-                        //size_t kB = get_right_factors(j, JB, kW);
+                    if (DI[j]==h) {
                         size_t kB = get_right_factors(j, JB, N);
-                        if (D2I[kB + (N-1)*N] == MDI[JB[kB]]) { // check if multi degrees match
-                            //int d = coeff_word_in_basis_element(kB, N-1, JB[kB], D2I, W2I); //, FA); 
-                            int d = coeff_word_in_basis_element(kB, N-1, JB[kB], D2I, TW2I); //, FA); 
+                        if (D[kB + (N-1)*N] == DI[JB[kB]]) { // check if multi degrees match
+                            int d = coeff_word_in_basis_element(kB, N-1, JB[kB], D, TWI); 
                             if (d!=0) {
-                                //for (int k=0; k<=kB; k++) {
                                 for (int k=0; k<=kB && k<=kW; k++) {
                                     c[JW[k]] -= d*c[JB[k]];
                                 }
