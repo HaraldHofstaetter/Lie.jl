@@ -12,47 +12,24 @@
 
 static size_t K;             /* number of generators */
 static size_t N;             /* maximum length of Lyndon words (=maximum order of Lie series expansion) */
-static generator_t **W=NULL; /* W[i] ... nth Lyndon word, ordered primarily by length and secondarily
-                               by lexicographical order */
-static uint32_t *p1=NULL;   /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
+static generator_t **W=NULL; /* W[i] ... nth Lyndon word, ordered primarily by length and 
+                                secondarily by lexicographical order */
+static uint32_t *p1=NULL;    /* standard factorization of W[i] is W[p1[i]]*W[p2[i]] */
 static uint32_t *p2=NULL;
 static uint8_t  *nn=NULL;    /* nn[i] = length of W[i] */
 static uint32_t *ii=NULL;    /* W[ii[n-1]] = first Lyndon word of length n; 
-                               W[ii[n]-1] = last Lyndon word of length n */
-static uint32_t *WI=NULL;  /* WI[i] = word index of W[i] */
-static uint32_t *DI=NULL;  /* DI[i] = multi degree index of W[i] */
+                                W[ii[n]-1] = last Lyndon word of length n */
+static uint32_t *WI=NULL;    /* WI[i] = word index of W[i] */
+static uint32_t *DI=NULL;    /* DI[i] = multi degree index of W[i] */
 
 
-static size_t n_lyndon;     /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
+static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
-static size_t M;            /* maximum lookup length */ 
+static size_t M;             /* maximum lookup length */ 
 
-static int **T = NULL;      /* precomputed lookup table: word with index i 
-                             *      T[i][T_P[j]]
-                             * in basis element with number j.  */
+static int **T = NULL;       /* precomputed lookup table: word with index i has coefficient 
+                                T[i][T_P[j]]  in basis element with number j.  */
 static uint32_t *T_P = NULL;
-
-#if 0
-
-static int **T=NULL;      /* precomputed lookup table: word with index i and multi-degree 
-                             * index md has coefficient
-                             *      T[md][[T_P1[j] + T_P2[i]*T_D1[md]]
-                             * in basis element with number j. 
-                             * Basis element j and word i are assumed to have the same 
-                             * multi-degree md and degree (=length) <= M 
-                             * Note: switching rows and columns such that
-                             * T[md][[T_P1[j]*T_D2[md] + T_P2[i]] results in a  significant 
-                             * loss of performance. */
-
-static uint32_t *T_D1=NULL; /* T_D1[i] = number of Lyndon words (Lyndon basis elements) 
-                               which have multi degree index i */
-static uint32_t *T_D2=NULL; /* T D2[i] = number of all words of length <= M
-                               which have multi degree index i */
-static uint32_t *T_P1=NULL; /* Lyndon word W[i] is the T_P1[i]-th Lyndon word having 
-                               multi degree index DI[i] */
-static uint32_t *T_P2=NULL; /* Word with index i is the T_P2[i]-th word in the list of all words 
-                               having the same multi degree index as the given word with index i */
-#endif
 
 static unsigned int verbosity_level;
 static INTEGER *FACTORIAL=NULL;
@@ -863,20 +840,23 @@ static void gen_ith_word_of_length_n(size_t i, size_t n, generator_t w[]) {
     }
 }
 
-/*
-
-static int first_A(generator_t w[], size_t l, size_t r) {
-    int x=0;
-    for(; (x<=r-l) && (w[l+x]!=0); x++) {} 
-    // return x;
-    return SBINOMIAL[(r-l)*(N+1)+x];
-}
-*/ 
-
 static void init_lookup_table() {
+/* precomputed lookup table: word with index i and multi-degree index md has coefficient
+ *      T[md][[T_P1[j] + T_P2[i]*T_D1[md]]
+ * in basis element with number j. 
+ * Basis element j and word i are assumed to have the same multi-degree md and length <= M. 
+ * Note: switching rows and columns such that T[md][[T_P1[j]*T_D2[md] + T_P2[i]] 
+ * results in a  significant * loss of performance. 
+ *
+ * T_D1[i] = number of Lyndon words (Lyndon basis elements) which have multi degree index i. 
+ * T D2[i] = number of all words of length <= M which have multi degree index i. 
+ * Lyndon word W[i] is the T_P1[i]-th Lyndon word having multi degree index DI[i]. 
+ * Word with index i is the T_P2[i]-th word in the list of all words 
+ * having the same multi degree index as the given word with index i 
+ */
     if (M==0) {
         return;
-    }
+    }    
     
     double t0 = tic();
     size_t H = DI[ii[M]-1]+1; 
@@ -915,19 +895,11 @@ static void init_lookup_table() {
         }
     }
 
-#if (LOOKUP_ORDER==0)        
     T = calloc((ipow(K, M+1)-1)/(K-1)-1, sizeof(int*));
     for (int wi=0; wi<(ipow(K, M+1)-1)/(K-1)-1; wi++) {
         int di = WDI[wi]; 
         T[wi] = T0[di] + T_P2[wi]*T_D1[di];
     }
-#else
-    T = calloc(ii[M], sizeof(int*));
-    for (int j=0; j<ii[M]; j++) {
-        int di = DI[j];
-        T[j] = T0[di] + T_P1[j]*T_D2[di];
-    }
-#endif
     
     /* case n=1: */
     for (int j=0; j<K; j++) {
@@ -955,7 +927,6 @@ static void init_lookup_table() {
             uint32_t di2 = DI[j2];
             int y1 = T_D2[di1];
             int y2 = T_D2[di2];
-#if (LOOKUP_ORDER==0)        
             int x = T_D1[di];
             int x1 = T_D1[di1];
             int x2 = T_D1[di2];
@@ -996,47 +967,10 @@ static void init_lookup_table() {
                     }
                 }
             }
-#else
-            int y = T_D2[di];
-            int *L = T0[di]+T_P1[j]*y;
-            int *L1 = T0[di1]+T_P1[j1]*y1;
-            int *L2 = T0[di2]+T_P1[j2]*y2;
-            for (int i1=FWD[di1]; i1<=WI[j1]; i1++) {
-                if (WDI[i1+os1]==di1) {
-                    int i = T_P2[i1*Kn2+FWD[di2]+os];
-                    int c1 = L1[T_P2[i1+os1]];
-                    if (c1!=0) {
-                        for (int i2=0; i2<y2; i2++) {
-                            int c2 = L2[i2];
-                            L[i] = c1*c2;  
-                            i++;
-                        }
-                    }
-                }
-            }
-            for (int i2=FWD[di2]; i2<=WI[j2]; i2++) {
-                if (WDI[i2+os2]==di2) {
-                    int i = T_P2[i2*Kn1+FWD[di1]+os];
-                    int c2 = L2[T_P2[i2+os2]];
-                    if (c2!=0) {
-                        for (int i1=0; i1<y1; i1++) {
-                            int c1 = L1[i1];
-                            L[i] -= c1*c2;  
-                            i++;
-                        }
-                    }
-                }
-            }
-#endif            
         }
     }
-#if (LOOKUP_ORDER==0)        
     T_P = T_P1;
     free(T_P2);
-#else            
-    T_P = T_P2;
-    free(T_P1);
-#endif
     free(T_D1);
     free(T_D2);
     free(FWD);
@@ -1053,7 +987,7 @@ static void init_lookup_table() {
 static void free_lookup_table(void) {
     free(T);
     free(T_P);
-    // TODO: free memor as indicated above !!!
+    // TODO: free memory as indicated above !!!
 }
 
 static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
