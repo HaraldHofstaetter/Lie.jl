@@ -41,8 +41,8 @@ typedef struct lie_series_t {
     size_t K;
     size_t N;
     size_t n_lyndon;
-    size_t *p1;
-    size_t *p2;
+    uint32_t *p1;
+    uint32_t *p2;
     INTEGER denom;
     INTEGER *c;
 } lie_series_t;
