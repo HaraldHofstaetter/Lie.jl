@@ -775,49 +775,6 @@ int phi(INTEGER y[], int m, generator_t w[], expr_t* ex, INTEGER v[]) {
     }
 }
 
-static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D[], int **TWI) {  
-    /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
-     * with number j.
-     * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
-     * of a word w which is given only implicitely.
-     * D is a table of multi degree indices such that D[l'+r'*N] is the multi degree index
-     * of w[l':r']. 
-     */
-    int n=r-l+1;
-
-    if (n==1) {
-        return DI[j]==D[l + r*N];
-    }
-
-    if (n<=M) {  /* use lookup table */
-        return TWI[l + r*N][T_P[j]]; 
-    }
-
-    size_t j1 = p1[j];
-    size_t j2 = p2[j];
-    size_t m1 = nn[j1];
-    size_t m2 = r-l+1-m1;
-
-    int mi = DI[j1];
-    int c2 = 0;
-    if (D[l+m2 + r*N] == mi) {
-        c2 = coeff_word_in_basis_element(l+m2, r, j1, D, TWI); 
-        if (c2!=0) {
-            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D, TWI); 
-        }
-    }
-
-    int c1 = 0;
-    if (D[l + (l+m1-1)*N] == mi) {
-        c1 = coeff_word_in_basis_element(l+m1, r, j2, D, TWI); 
-        if (c1!=0) {
-            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D, TWI); 
-        }
-    }
-
-    return c1 - c2;
-}
-
 static void gen_ith_word_of_length_n(size_t i, size_t n, generator_t w[]) {
     /* METHOD: compute base K expansion of i */
     for (int j=0; j<n; j++) {
@@ -841,18 +798,21 @@ static void gen_ith_word_of_length_n(size_t i, size_t n, generator_t w[]) {
 }
 
 static void init_lookup_table() {
-/* precomputed lookup table: word with index i and multi-degree index md has coefficient
- *      T[md][[T_P1[j] + T_P2[i]*T_D1[md]]
- * in basis element with number j. 
- * Basis element j and word i are assumed to have the same multi-degree md and length <= M. 
- * Note: switching rows and columns such that T[md][[T_P1[j]*T_D2[md] + T_P2[i]] 
- * results in a  significant * loss of performance. 
- *
+/* Define T, T_P such that T[i]=T0[d]+T_P2[i]*T_D1[d] where d is multi degree index of 
+ * the word with index i * and T_P=T_P1.
+ * Here:
  * T_D1[i] = number of Lyndon words (Lyndon basis elements) which have multi degree index i. 
  * T D2[i] = number of all words of length <= M which have multi degree index i. 
- * Lyndon word W[i] is the T_P1[i]-th Lyndon word having multi degree index DI[i]. 
- * Word with index i is the T_P2[i]-th word in the list of all words 
- * having the same multi degree index as the given word with index i 
+ * T_P1[i] such that Lyndon word W[i] is the T_P1[i]-th Lyndon word having multi degree 
+ *         index DI[i]. 
+ * T_P2[i] such that word with index i is the T_P2[i]-th word in the list of all words 
+ *          having the same multi degree index as the given word with index i 
+ * Then: word with index i and multi-degree index d has coefficient
+ *      T[i][T_P[j]] = T0[d][[T_P1[j] + T_P2[i]*T_D1[d]]
+ * in basis element with number j. 
+ * Basis element j and word i are assumed to have the same multi-degree  and length <= M. 
+ * Note: transposing rows and columns such that the coefficient is given by 
+ * T0[d][[T_P1[j]*T_D2[d] + T_P2[i]] results in a  significant loss of performance. 
  */
     if (M==0) {
         return;
@@ -990,6 +950,53 @@ static void free_lookup_table(void) {
     // TODO: free memory as indicated above !!!
 }
 
+
+
+static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D[], int **TWI) {  
+    /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
+     * with number j.
+     * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
+     * of a word w which is given only implicitely.
+     * D is a table of multi degree indices such that D[l'+r'*N] is the multi degree index
+     * of w[l':r']. 
+     */
+    int n=r-l+1;
+
+    if (n==1) {
+        return DI[j]==D[l + r*N];
+    }
+
+    if (n<=M) {  /* use lookup table */
+        return TWI[l + r*N][T_P[j]]; 
+    }
+
+    size_t j1 = p1[j];
+    size_t j2 = p2[j];
+    size_t m1 = nn[j1];
+    size_t m2 = r-l+1-m1;
+
+    int mi = DI[j1];
+    int c2 = 0;
+    if (D[l+m2 + r*N] == mi) {
+        c2 = coeff_word_in_basis_element(l+m2, r, j1, D, TWI); 
+        if (c2!=0) {
+            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D, TWI); 
+        }
+    }
+
+    int c1 = 0;
+    if (D[l + (l+m1-1)*N] == mi) {
+        c1 = coeff_word_in_basis_element(l+m1, r, j2, D, TWI); 
+        if (c1!=0) {
+            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D, TWI); 
+        }
+    }
+
+    return c1 - c2;
+}
+
+
+
 static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
     size_t k = 0;
     J[0] = i;
@@ -1037,6 +1044,12 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t h1 = DI[i1];
     size_t h2 = DI[i2];
 
+    double h_time[h2+1];
+    int h_n[h2+1];
+#ifdef _OPENMP
+    int h_thread[h2+1];
+#endif
+
     #pragma omp parallel 
     {
     size_t D[N*N];
@@ -1053,9 +1066,15 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
      */
     #pragma omp for schedule(dynamic,1) 
     for (int h=h1; h<=h2; h++) {
+        h_time[h] = tic();
+        h_n[h] = 0;
+#ifdef _OPENMP
+        h_thread[h] = omp_get_thread_num();
+#endif
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
             if (DI[i]==h) {
+                h_n[h]++;
                 if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                     c[i] = 0;
                     continue;
@@ -1090,7 +1109,22 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 }
             }
         }
+        h_time[h] = toc(h_time[h]);
     }
+    }
+    if (verbosity_level>=2) {
+#ifdef _OPENMP
+        printf("# degree     #basis        time thread\n");
+#else
+        printf("# degree     #basis        time\n");
+#endif
+        for (int h=h1; h<=h2; h++) {
+#ifdef _OPENMP
+            printf("#%7lu %10i %11.2f   %4i\n", h-h1+1, h_n[h], h_time[h], h_thread[h]);
+#else
+            printf("#%7lu %10i %11.2f\n", h-h1+1, h_n[h], h_time[h]);
+#endif
+        }
     }
     if (verbosity_level>=1) {
         double t1 = toc(t0);
