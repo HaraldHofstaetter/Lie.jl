@@ -1044,11 +1044,51 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t h1 = DI[i1];
     size_t h2 = DI[i2];
 
-    double h_time[h2+1];
-    int h_n[h2+1];
+#ifdef WORDS_SEPARATELY 
+    #pragma omp parallel 
+    {
+    
+    size_t JW[N];
+    INTEGER t[N+1];
+
+    #pragma omp for schedule(dynamic,1) 
+    for (int i=i1; i<=i2; i++) {
+            if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
+                c[i] = 0;
+                continue;
+            }
+            generator_t *w = W[i];
+            int m = phi(t, N+1, w, ex, e);
+            size_t kW = get_right_factors(i, JW, N);
+            for (int k=0; k<=kW; k++) {
+                c[JW[k]] = k<m ? t[k] : 0;
+            }
+    }
+    }
+#endif    
+
+    double h_time[h2-h1+1];
+    int h_n[h2-h1+1];
 #ifdef _OPENMP
-    int h_thread[h2+1];
+    int h_thread[h2-h1+1];
 #endif
+    int hh[h2-h1+1];
+    if (K==2 && (N&1)==0) {
+        /* generate loop order corresponding to decreasing running times:
+         * N/2, N/2-1, N/2+1, N/2-1, N/2+1, ..., 1, N-1
+         */ 
+        int n1 = N>>1;
+        hh[0]=n1-1;
+        for (int k=1; k<n1; k++) {
+            hh[N-2*k-1] = k-1;
+            hh[2*k+1-1] = n1+k-1;
+        }
+    }
+    else {
+        for (int k=0; k<=h2-h1; k++) {
+            hh[k] = k;
+        }
+    }
 
     #pragma omp parallel 
     {
@@ -1057,7 +1097,9 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     
     size_t JW[N];
     size_t JB[N];
+#ifndef WORDS_SEPARATELY 
     INTEGER t[N+1];
+#endif
 
     /* Note: We choose schedule(dynamic, 1) because each
      * iteration of the loop is associated with a specific 
@@ -1065,16 +1107,17 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
      * for different multi degree indices. 
      */
     #pragma omp for schedule(dynamic,1) 
-    for (int h=h1; h<=h2; h++) {
-        h_time[h] = tic();
-        h_n[h] = 0;
+    for (int k=0; k<=h2-h1; k++) {
+        int h = h1+hh[k];
+        h_time[k] = tic();
+        h_n[k] = 0;
 #ifdef _OPENMP
-        h_thread[h] = omp_get_thread_num();
+        h_thread[k] = omp_get_thread_num();
 #endif
         size_t j1 = 0;
         for (int i=i1; i<=i2; i++) {
             if (DI[i]==h) {
-                h_n[h]++;
+                h_n[k]++;
                 if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                     c[i] = 0;
                     continue;
@@ -1084,13 +1127,15 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 }
 
                 generator_t *w = W[i];
+#ifndef WORDS_SEPARATELY 
                 int m = phi(t, N+1, w, ex, e);
-
+#endif
                 size_t kW = get_right_factors(i, JW, N);
+#ifndef WORDS_SEPARATELY 
                 for (int k=0; k<=kW; k++) {
                     c[JW[k]] = k<m ? t[k] : 0;
                 }
-
+#endif
                 gen_D(K, N, w, D);
                 gen_TWI(K, N, M, w, TWI);
 
@@ -1109,7 +1154,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 }
             }
         }
-        h_time[h] = toc(h_time[h]);
+        h_time[k] = toc(h_time[k]);
     }
     }
     if (verbosity_level>=2) {
@@ -1118,11 +1163,11 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
 #else
         printf("# degree     #basis        time\n");
 #endif
-        for (int h=h1; h<=h2; h++) {
+        for (int k=0; k<=h2-h1; k++) {
 #ifdef _OPENMP
-            printf("#%7lu %10i %11.2f   %4i\n", h-h1+1, h_n[h], h_time[h], h_thread[h]);
+            printf("#%7i %10i %11.2f   %4i\n", hh[k]+1, h_n[k], h_time[k], h_thread[k]);
 #else
-            printf("#%7lu %10i %11.2f\n", h-h1+1, h_n[h], h_time[h]);
+            printf("#%7i %10i %11.2f\n", hh[k]k+1, h_n[k], h_time[k]);
 #endif
         }
     }
