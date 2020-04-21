@@ -1044,7 +1044,6 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t h1 = DI[i1];
     size_t h2 = DI[i2];
 
-#ifdef WORDS_SEPARATELY 
     #pragma omp parallel 
     {
     
@@ -1065,8 +1064,12 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
             }
     }
     }
-#endif    
+    if (verbosity_level>=1) {
+        double t1 = toc(t0);
+        printf("#compute coeffs of words: time=%g sec\n", t1);
+    }
 
+    t0 = tic();
     double h_time[h2-h1+1];
     int h_n[h2-h1+1];
 #ifdef _OPENMP
@@ -1097,9 +1100,6 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     
     size_t JW[N];
     size_t JB[N];
-#ifndef WORDS_SEPARATELY 
-    INTEGER t[N+1];
-#endif
 
     /* Note: We choose schedule(dynamic, 1) because each
      * iteration of the loop is associated with a specific 
@@ -1127,15 +1127,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 }
 
                 generator_t *w = W[i];
-#ifndef WORDS_SEPARATELY 
-                int m = phi(t, N+1, w, ex, e);
-#endif
                 size_t kW = get_right_factors(i, JW, N);
-#ifndef WORDS_SEPARATELY 
-                for (int k=0; k<=kW; k++) {
-                    c[JW[k]] = k<m ? t[k] : 0;
-                }
-#endif
                 gen_D(K, N, w, D);
                 gen_TWI(K, N, M, w, TWI);
 
@@ -1173,7 +1165,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     }
     if (verbosity_level>=1) {
         double t1 = toc(t0);
-        printf("#compute lie series: time=%g sec\n", t1);
+        printf("#convert to lie series: time=%g sec\n", t1);
     }
 }
 
