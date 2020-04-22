@@ -952,7 +952,7 @@ static void free_lookup_table(void) {
 
 
 
-static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D[], int **TWI) {  
+static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t N, size_t D[], int **TWI) {  
     /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
      * with number j.
      * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
@@ -978,17 +978,17 @@ static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t D[],
     int mi = DI[j1];
     int c2 = 0;
     if (D[l+m2 + r*N] == mi) {
-        c2 = coeff_word_in_basis_element(l+m2, r, j1, D, TWI); 
+        c2 = coeff_word_in_basis_element(l+m2, r, j1, N, D, TWI); 
         if (c2!=0) {
-            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, D, TWI); 
+            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, N, D, TWI); 
         }
     }
 
     int c1 = 0;
     if (D[l + (l+m1-1)*N] == mi) {
-        c1 = coeff_word_in_basis_element(l+m1, r, j2, D, TWI); 
+        c1 = coeff_word_in_basis_element(l+m1, r, j2, N, D, TWI); 
         if (c1!=0) {
-            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, D, TWI); 
+            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, N, D, TWI); 
         }
     }
 
@@ -1044,6 +1044,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t h1 = DI[i1];
     size_t h2 = DI[i2];
 
+#ifndef MERGE_WORDS_PASS
     #pragma omp parallel 
     {
     
@@ -1068,8 +1069,9 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
         double t1 = toc(t0);
         printf("#compute coeffs of words: time=%g sec\n", t1);
     }
-
     t0 = tic();
+#endif    
+
     double h_time[h2-h1+1];
     int h_n[h2-h1+1];
 #ifdef _OPENMP
@@ -1100,6 +1102,9 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     
     size_t JW[N];
     size_t JB[N];
+#ifdef MERGE_WORDS_PASS
+    INTEGER t[N+1];
+#endif
 
     /* Note: We choose schedule(dynamic, 1) because each
      * iteration of the loop is associated with a specific 
@@ -1115,6 +1120,7 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
         h_thread[k] = omp_get_thread_num();
 #endif
         size_t j1 = 0;
+        size_t kW1 = N+1; 
         for (int i=i1; i<=i2; i++) {
             if (DI[i]==h) {
                 h_n[k]++;
@@ -1126,16 +1132,25 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                     j1 = i;
                 }
 
-                generator_t *w = W[i];
                 size_t kW = get_right_factors(i, JW, N);
-                gen_D(K, N, w, D);
-                gen_TWI(K, N, M, w, TWI);
+                generator_t *w = W[i];
+#ifdef MERGE_WORDS_PASS
+                int m = phi(t, N+1, w, ex, e);
+                for (int k=0; k<=kW; k++) {
+                    c[JW[k]] = k<m ? t[k] : 0;
+                }
+#endif
+                kW1 = kW<kW1 ? kW : kW1;
+                size_t N1 = N-kW1;
+
+                gen_D(K, N1, w+kW1, D);
+                gen_TWI(K, N1, M, w+kW1, TWI);
 
                 for (int j=j1; j<=i-1; j++) {
                     if (DI[j]==h) {
                         size_t kB = get_right_factors(j, JB, N);
-                        if (D[kB + (N-1)*N] == DI[JB[kB]]) { // check if multi degrees match
-                            int d = coeff_word_in_basis_element(kB, N-1, JB[kB], D, TWI); 
+                        if (D[kB-kW1 + (N1-1)*N1] == DI[JB[kB]]) { // check if multi degrees match
+                            int d = coeff_word_in_basis_element(kB-kW1, N1-1, JB[kB], N1, D, TWI); 
                             if (d!=0) {
                                 for (int k=0; k<=kB && k<=kW; k++) {
                                     c[JW[k]] -= d*c[JB[k]];
