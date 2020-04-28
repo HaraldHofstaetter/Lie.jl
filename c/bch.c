@@ -23,16 +23,30 @@ static uint32_t *WI=NULL;    /* WI[i] = word index of W[i] */
 static uint32_t *DI=NULL;    /* DI[i] = multi degree index of W[i] */
 
 
-static size_t n_lyndon;      /* number of Lyndon words of length <=N, n_lyndon = ii[N] */
 
-static size_t M;             /* maximum lookup length */ 
 
-static int **T = NULL;       /* precomputed lookup table: word with index i has coefficient 
+static size_t N_LYNDON;      /* number of Lyndon words of length <=N, N_LYNDON = ii[N] */
+
+static size_t M = 0;             /* maximum lookup length */ 
+
+typedef int32_t TINT_t ;
+static TINT_t **T = NULL;       /* precomputed lookup table: word with index i has coefficient 
                                 T[i][T_P[j]]  in basis element with number j.  */
 static uint32_t *T_P = NULL;
 
-static unsigned int verbosity_level;
+static unsigned int VERBOSITY_LEVEL = 0;
+
+#ifdef _OPENMP
+static unsigned int INNER_THREADS = 1;
+static unsigned int OUTER_THREADS = 1; 
+#endif
+
 static INTEGER *FACTORIAL=NULL;
+
+/*
+static uint32_t *DIABBB=NULL;    // DIB[n] =  DI[ii[n]-1] multi degree index of ABBBBBB, #B = n-1 
+static int *SBINOMIAL=NULL;
+*/
 
 
 static double tic(void) {
@@ -250,7 +264,7 @@ static void gen_D(size_t K, size_t N, generator_t w[], size_t D[]) {
 }
 
 
-static void gen_TWI(size_t K, size_t N, size_t M, generator_t w[], int **TWI) {
+static void gen_TWI(size_t K, size_t N, size_t M, generator_t w[], TINT_t **TWI) {
     for (int r=N-1; r>=0; r--) {
         int x = 0;
         int y = 1;
@@ -358,17 +372,17 @@ static void init_lyndon_words(void) {
     size_t nLW[N];
     number_of_lyndon_words(K, N, nLW);
     size_t mem_len = 0;
-    n_lyndon = 0;
+    N_LYNDON = 0;
     for (int n=1; n<=N; n++) {
-        n_lyndon += nLW[n-1];
+        N_LYNDON += nLW[n-1];
         mem_len += n*nLW[n-1];
     }
-    W = malloc(n_lyndon*sizeof(generator_t *)); 
-    p1 = malloc(n_lyndon*sizeof(uint32_t)); 
-    p2 = malloc(n_lyndon*sizeof(uint32_t)); 
-    nn = malloc(n_lyndon*sizeof(uint8_t)); 
-    WI = malloc(n_lyndon*sizeof(uint32_t));
-    DI = malloc(n_lyndon*sizeof(uint32_t));
+    W = malloc(N_LYNDON*sizeof(generator_t *)); 
+    p1 = malloc(N_LYNDON*sizeof(uint32_t)); 
+    p2 = malloc(N_LYNDON*sizeof(uint32_t)); 
+    nn = malloc(N_LYNDON*sizeof(uint8_t)); 
+    WI = malloc(N_LYNDON*sizeof(uint32_t));
+    DI = malloc(N_LYNDON*sizeof(uint32_t));
     ii = malloc((N+1)*sizeof(uint32_t)); 
     W[0] = malloc(mem_len*sizeof(generator_t)); 
     ii[0] = 0;
@@ -376,14 +390,14 @@ static void init_lyndon_words(void) {
     for (int n=1; n<=N; n++) {
         ii[n] = ii[n-1] + nLW[n-1];
         for (int k=0; k<nLW[n-1]; k++) {            
-            if (m<n_lyndon-1) { /* avoiding illegal W[n_lyndon] */
+            if (m<N_LYNDON-1) { /* avoiding illegal W[N_LYNDON] */
                 W[m+1] = W[m]+n;
             }
             nn[m] = n;
             m++;
         }
     }
-    assert(m==n_lyndon);
+    assert(m==N_LYNDON);
     for (int i=0; i<K; i++) {
         p1[i] = i;
         p2[i] = 0;
@@ -404,11 +418,21 @@ static void init_lyndon_words(void) {
     }
 
     genLW(K, N, 1, 1, a, wp);
+
+/*
+    DIABBB = malloc(N*sizeof(uint32_t)); 
+    for (int n=1; n<N; n++) {
+       DIABBB[n] =  DI[ii[n]-1];
+    }
+*/    
     
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
-        printf("#number of Lyndon words of length<=%li over set of %li letters: %li\n", N, K, n_lyndon);
+        printf("#number of Lyndon words of length<=%li over set of %li letters: %li\n", N, K, N_LYNDON);
         printf("#init Lyndon words: time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
 }
 
@@ -429,10 +453,22 @@ static void init_factorial(void) {
     for (int n=1; n<=N; n++) {
         FACTORIAL[n] = n*FACTORIAL[n-1];
     }
+/*    
+    SBINOMIAL = malloc((N+1)*(N+1)*sizeof(int)); 
+    for (int n=0; n<=N; n++) {
+        for (int k=0; k<=n; k++) {
+            SBINOMIAL[n*(N+1)+k] = (k&1 ? -1 : 1 )*binomial(n, k);
+        }
+        for (int k=n+1; k<=N; k++) {
+            SBINOMIAL[n*(N+1)+k] = 0;
+        }
+    }
+*/    
 }
 
 static void free_factorial(void) {
     free(FACTORIAL);
+//    free(SBINOMIAL);
 }
 
 
@@ -847,11 +883,11 @@ static void init_lookup_table() {
             }
         }
     }
-    int **T0 = calloc(H, sizeof(int*));
+    TINT_t **T0 = calloc(H, sizeof(TINT_t*));
     for (int h=0; h<H; h++) {
         size_t d = T_D1[h]*T_D2[h];
         if (d>0) {
-            T0[h] = calloc(d, sizeof(int)); // !!! TODO: eventually free this memory
+            T0[h] = calloc(d, sizeof(TINT_t)); // !!! TODO: eventually free this memory
         }
     }
 
@@ -872,7 +908,7 @@ static void init_lookup_table() {
         size_t ii1 = ii[n-1];
         size_t ii2 = ii[n]-1;
         int os = (ipow(K, n)-1)/(K-1)-1;
-        #pragma omp for schedule(dynamic,1)
+        #pragma omp parallel for schedule(dynamic,256)
         for (int j=ii1; j<=ii2; j++) {
             uint32_t j1 = p1[j];
             uint32_t j2 = p2[j];
@@ -890,9 +926,9 @@ static void init_lookup_table() {
             int x = T_D1[di];
             int x1 = T_D1[di1];
             int x2 = T_D1[di2];
-            int *L = T0[di]+T_P1[j];
-            int *L1 = T0[di1]+T_P1[j1];
-            int *L2 = T0[di2]+T_P1[j2];
+            TINT_t *L = T0[di]+T_P1[j];
+            TINT_t *L1 = T0[di1]+T_P1[j1];
+            TINT_t *L2 = T0[di2]+T_P1[j2];
             for (int i1=FWD[di1]; i1<=WI[j1]; i1++) {
                 if (WDI[i1+os1]==di1) {
                     int i = T_P2[i1*Kn2+FWD[di2]+os];
@@ -937,10 +973,13 @@ static void init_lookup_table() {
     free(WDI);
     free(T0);
 
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#lookup table for word lengths<=%li\n", M);
         printf("#init lookup table: time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
 }
 
@@ -952,7 +991,7 @@ static void free_lookup_table(void) {
 
 
 
-static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t N, size_t D[], int **TWI) {  
+static int coeff_word_in_basis_element(/* generator_t w[], */ size_t l, size_t r, size_t j, size_t N1, size_t D[], TINT_t **TWI) {  
     /* computes the coefficient of the word with index wi=W2I[l+r*N] in the basis element
      * with number j.
      * W2I is a table of indices such that W2I[l'+r'*N] is the index of the subword w[l':r'] 
@@ -963,12 +1002,23 @@ static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t N, s
     int n=r-l+1;
 
     if (n==1) {
-        return DI[j]==D[l + r*N];
+        return DI[j]==D[l + r*N1];
     }
 
     if (n<=M) {  /* use lookup table */
-        return TWI[l + r*N][T_P[j]]; 
+        return TWI[l + r*N1][T_P[j]]; 
     }
+/*
+    if (K==2) {
+        //if (DI[j] == DI[ii[n]-1]) { // does w[l:r] and W[j] contain exactly one A ?
+        if (DI[j] == DIABBB[n]) { // does w[l:r] and W[j] contain exactly one A ?
+            int x=0;
+            for(; (x<n) && (w[l+x]!=0); x++) {} 
+            // x ... position of the unique A in w
+            return SBINOMIAL[(r-l)*(N+1)+x];
+        }
+    }
+*/
 
     size_t j1 = p1[j];
     size_t j2 = p2[j];
@@ -977,18 +1027,18 @@ static int coeff_word_in_basis_element(size_t l, size_t r, size_t j, size_t N, s
 
     int mi = DI[j1];
     int c2 = 0;
-    if (D[l+m2 + r*N] == mi) {
-        c2 = coeff_word_in_basis_element(l+m2, r, j1, N, D, TWI); 
+    if (D[l+m2 + r*N1] == mi) {
+        c2 = coeff_word_in_basis_element(/* w, */ l+m2, r, j1, N1, D, TWI); 
         if (c2!=0) {
-            c2 *= coeff_word_in_basis_element(l, l+m2-1, j2, N, D, TWI); 
+            c2 *= coeff_word_in_basis_element(/* w, */ l, l+m2-1, j2, N1, D, TWI); 
         }
     }
 
     int c1 = 0;
-    if (D[l + (l+m1-1)*N] == mi) {
-        c1 = coeff_word_in_basis_element(l+m1, r, j2, N, D, TWI); 
+    if (D[l + (l+m1-1)*N1] == mi) {
+        c1 = coeff_word_in_basis_element(/* w, */ l+m1, r, j2, N1, D, TWI); 
         if (c1!=0) {
-            c1 *= coeff_word_in_basis_element(l, l+m1-1, j1, N, D, TWI); 
+            c1 *= coeff_word_in_basis_element(/* w, */ l, l+m1-1, j1, N1, D, TWI); 
         }
     }
 
@@ -1010,7 +1060,7 @@ static inline size_t get_right_factors(size_t i, size_t J[], size_t kmax) {
 }
 
 static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int shortcut_for_classical_bch) {
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         printf("#expression="); print_expr(ex); printf("\n"); 
         printf("#denominator="); print_INTEGER(denom); printf("\n");
         printf("#divisibility checks are "
@@ -1020,6 +1070,9 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
             "on"
 #endif
         "\n");
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     double t0 = tic();
 
@@ -1051,9 +1104,9 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
     size_t JW[N];
     INTEGER t[N+1];
 
-    #pragma omp for schedule(dynamic,1) 
+    #pragma omp for schedule(dynamic,256) 
     for (int i=i1; i<=i2; i++) {
-            if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
+             if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                 c[i] = 0;
                 continue;
             }
@@ -1065,12 +1118,23 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
             }
     }
     }
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#compute coeffs of words: time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     t0 = tic();
-#endif    
+#endif  
+
+    if (VERBOSITY_LEVEL>=2) {
+#ifdef _OPENMP
+        printf("# degree     #basis        time thread\n");
+#else
+        printf("# degree     #basis        time\n");
+#endif
+    }
 
     double h_time[h2-h1+1];
     int h_n[h2-h1+1];
@@ -1095,17 +1159,27 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
         }
     }
 
-    #pragma omp parallel 
+#ifdef _OPENMP
+    omp_set_nested(INNER_THREADS>1);
+#endif
+
+    #pragma omp parallel num_threads(OUTER_THREADS)
     {
+    int *jj = calloc(N_LYNDON, sizeof(int));  // N_LYNDON far too large upper bound
+#ifdef _OPENMP
+    int *d = NULL;
+    if (INNER_THREADS>1) {
+        d = calloc(N_LYNDON, sizeof(int));
+    }
+#endif
     size_t D[N*N];
-    int *TWI[N*N];
+    TINT_t *TWI[N*N];
     
     size_t JW[N];
     size_t JB[N];
 #ifdef MERGE_WORDS_PASS
     INTEGER t[N+1];
 #endif
-
     /* Note: We choose schedule(dynamic, 1) because each
      * iteration of the loop is associated with a specific 
      * multi degree index, and the work to be done varies widely
@@ -1119,17 +1193,23 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
 #ifdef _OPENMP
         h_thread[k] = omp_get_thread_num();
 #endif
-        size_t j1 = 0;
         size_t kW1 = N+1; 
+
+        int jj_max = 0; 
         for (int i=i1; i<=i2; i++) {
             if (DI[i]==h) {
+                jj[jj_max] = i;
+                jj_max++;
+            }
+        }
+
+        for (int x=0; x<jj_max; x++) {
+            int i = jj[x];
+            {
                 h_n[k]++;
                 if (shortcut_for_classical_bch && !(N%2) && p1[i]!=0) {
                     c[i] = 0;
                     continue;
-                }
-                if (j1==0) {
-                    j1 = i;
                 }
 
                 size_t kW = get_right_factors(i, JW, N);
@@ -1146,41 +1226,73 @@ static void compute_lie_series(expr_t* ex, INTEGER c[], INTEGER denom, int short
                 gen_D(K, N1, w+kW1, D);
                 gen_TWI(K, N1, M, w+kW1, TWI);
 
-                for (int j=j1; j<=i-1; j++) {
-                    if (DI[j]==h) {
+#ifdef _OPENMP
+                if (INNER_THREADS>1) {
+                #pragma omp parallel for schedule(static, 512) num_threads(INNER_THREADS)
+                for (int y=x-1; y>=0; y--) {
+                //#pragma omp parallel for schedule(static, 1) num_threads(INNER_THREADS)
+                //for (int p=0; p<INNER_THREADS; p++) {
+                //for (int y=x-1-p; y>=0; y-=INNER_THREADS) {
+                    int j = jj[y];
+                    d[y] = 0;
+                    size_t kB = get_right_factors(j, JB, N);
+                    if (D[kB-kW1 + (N1-1)*N1] == DI[JB[kB]]) { // check if multi degrees match
+                        d[y] = coeff_word_in_basis_element(/* w+kW1, */ kB-kW1, N1-1, JB[kB], N1, D, TWI); 
+                    }
+                //}
+                }
+
+                for (int y=0; y<=x-1; y++) {
+                    int j = jj[y];
+                    if (d[y]!=0) {
                         size_t kB = get_right_factors(j, JB, N);
-                        if (D[kB-kW1 + (N1-1)*N1] == DI[JB[kB]]) { // check if multi degrees match
-                            int d = coeff_word_in_basis_element(kB-kW1, N1-1, JB[kB], N1, D, TWI); 
-                            if (d!=0) {
-                                for (int k=0; k<=kB && k<=kW; k++) {
-                                    c[JW[k]] -= d*c[JB[k]];
-                                }
+                            for (int k=0; k<=kB && k<=kW; k++) {
+                                c[JW[k]] -= d[y]*c[JB[k]];
+                            }
+                    }
+                }
+                }
+                else {
+#endif
+                for (int y=0; y<=x-1; y++) {
+                    int j = jj[y];
+                    size_t kB = get_right_factors(j, JB, N);
+                    if (D[kB-kW1 + (N1-1)*N1] == DI[JB[kB]]) { // check if multi degrees match
+                        int d = coeff_word_in_basis_element(/* w+kW1, */ kB-kW1, N1-1, JB[kB], N1, D, TWI);
+                        if (d!=0) {
+                            for (int k=0; k<=kB && k<=kW; k++) {
+                                c[JW[k]] -= d*c[JB[k]];
                             }
                         }
                     }
                 }
+#ifdef _OPENMP
+                }
+#endif
             }
         }
-        h_time[k] = toc(h_time[k]);
-    }
-    }
-    if (verbosity_level>=2) {
-#ifdef _OPENMP
-        printf("# degree     #basis        time thread\n");
-#else
-        printf("# degree     #basis        time\n");
-#endif
-        for (int k=0; k<=h2-h1; k++) {
+        h_time[k] = toc(h_time[k]); 
+        if (VERBOSITY_LEVEL>=2) {
 #ifdef _OPENMP
             printf("#%7i %10i %11.2f   %4i\n", hh[k]+1, h_n[k], h_time[k], h_thread[k]);
 #else
-            printf("#%7i %10i %11.2f\n", hh[k]k+1, h_n[k], h_time[k]);
+            printf("#%7i %10i %11.2f\n", hh[k]+1, h_n[k], h_time[k]);
 #endif
+            fflush(stdout);
         }
     }
-    if (verbosity_level>=1) {
+    free(jj);
+#ifdef _OPENMP
+    free(d);
+#endif
+    }
+
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#convert to lie series: time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
 }
 
@@ -1220,7 +1332,7 @@ static lie_series_t gen_result(INTEGER *c, INTEGER denom) {
     lie_series_t LS;
     LS.K = K;
     LS.N = N;
-    LS.n_lyndon = n_lyndon;
+    LS.n_lyndon = N_LYNDON;
     LS.p1 = p1;
     LS.p2 = p2;
     LS.denom = denom;
@@ -1231,14 +1343,17 @@ static lie_series_t gen_result(INTEGER *c, INTEGER denom) {
 lie_series_t lie_series(size_t K, expr_t* expr, size_t N, int64_t fac, size_t M) {
     double t0 = tic();
     init_all(K, N, M);
-    INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+    INTEGER *c = malloc(N_LYNDON*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N]*fac;
     compute_lie_series(expr, c, denom, 0);
     lie_series_t LS = gen_result(c, denom);
     free_all();
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#total time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     return LS;
 }
@@ -1249,7 +1364,7 @@ lie_series_t BCH(size_t N, size_t M) {
     expr_t *B = generator(1);
     expr_t *expr = logarithm(product(exponential(A), exponential(B)));
     init_all(2, N, M);
-    INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+    INTEGER *c = malloc(N_LYNDON*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N];
     compute_lie_series(expr, c, denom, 1);
     lie_series_t LS = gen_result(c, denom);
@@ -1257,9 +1372,12 @@ lie_series_t BCH(size_t N, size_t M) {
     free_expr(A);
     free_expr(B);
     free_expr(expr);
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#total time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     return LS;
 }
@@ -1271,28 +1389,36 @@ lie_series_t symBCH(size_t N, size_t M) {
     expr_t *expr = logarithm(product(product(exponential(halfA), exponential(B)), 
                                      exponential(halfA)));
     init_all(2, N, M);
-    INTEGER *c = malloc(n_lyndon*sizeof(INTEGER));
+    INTEGER *c = malloc(N_LYNDON*sizeof(INTEGER));
     INTEGER denom = FACTORIAL[N]*den_fac[N];
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         printf("#NOTE: in the following expression, A stands for A/2\n");
+        if (VERBOSITY_LEVEL>=2) {
+        }
     }
     compute_lie_series(expr, c, denom, 0);
     lie_series_t LS = gen_result(c, denom);
-    for (int i=0; i<n_lyndon; i++) {
+    for (int i=0; i<N_LYNDON; i++) {
         int nA = get_degree_of_generator(&LS, i, 0);
         LS.c[i] <<= N-1-nA; /* c[i] = c[i]*2^(N-1-nA) */
     }
     LS.denom <<= N-1; /* denom = denom*2^(N-1) */
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         printf("#denominator changed to "); print_INTEGER(LS.denom); printf("\n");
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     free_all();
     free_expr(halfA);
     free_expr(B);
     free_expr(expr);
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         double t1 = toc(t0);
         printf("#total time=%g sec\n", t1);
+        if (VERBOSITY_LEVEL>=2) {
+            fflush(stdout);
+        }
     }
     return LS;
 }
@@ -1306,8 +1432,18 @@ void free_lie_series(lie_series_t LS) {
 
 
 void set_verbosity_level(unsigned int level) {
-    verbosity_level = level;
+    VERBOSITY_LEVEL = level;
 }
+
+#ifdef _OPENMP
+void set_inner_threads(unsigned int n) {
+    INNER_THREADS = n;
+}
+
+void set_outer_threads(unsigned int n) {
+    OUTER_THREADS = n;
+}
+#endif
 
 
 void print_word(lie_series_t *LS,  size_t i) {
@@ -1403,7 +1539,7 @@ int get_degree_of_generator(lie_series_t *LS, size_t i, uint8_t g) {
 }
 
 void print_lists(lie_series_t *LS, unsigned int what) {
-    if (verbosity_level>=1) {
+    if (VERBOSITY_LEVEL>=1) {
         printf("# ");
         if (what & PRINT_INDEX) printf("i");
         if (what & PRINT_DEGREE) printf("\t|i|");

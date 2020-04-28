@@ -11,6 +11,9 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 
 long long int get_arg(int argc, char*argv[], char* varname, 
@@ -55,6 +58,11 @@ int main(int argc, char*argv[]) {
 #endif 
     size_t M = get_arg(argc, argv, "M", 0, 0, N>20 ? 20 : N);
     set_verbosity_level(get_arg(argc, argv ,"verbosity_level", 0, 0, 9));
+#ifdef _OPENMP    
+    int max_threads = omp_get_max_threads();
+    set_inner_threads(get_arg(argc, argv ,"inner_threads", 1, 1, max_threads));
+    set_outer_threads(get_arg(argc, argv ,"outer_threads", max_threads, 1, max_threads));
+#endif
 
     expr_t *A = generator(0);
     expr_t *B = generator(1);

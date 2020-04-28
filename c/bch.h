@@ -54,6 +54,12 @@ lie_series_t symBCH(size_t N, size_t M);
 void set_verbosity_level(unsigned int verbosity_level);
 void set_max_lookup_size(size_t M);
 
+#ifdef _OPENMP
+void set_inner_threads(unsigned int n);
+void set_outer_threads(unsigned int n);
+#endif
+
+
 void print_lie_series(lie_series_t *LS);
 
 enum {
